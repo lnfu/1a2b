@@ -19,7 +19,7 @@ void mysql_connect_remote_database(MYSQL *connection, char *ip_address,
   printf("done\n");
 }
 
-void mysql_query_data_and_print_results(MYSQL *connection, const char *query) {
+void execute_mysql_query_and_print(MYSQL *connection, const char *query) {
   MYSQL_RES *result;
   MYSQL_ROW row;
 
