@@ -141,7 +141,7 @@ int main(int argc, char *argv[]) {
                   "INSERT INTO users (username, useremail, userpassword) "
                   "VALUES ('%s', '%s', '%s');",
                   username, email, password);
-          mysql_query_data(connection, buffer);
+          execute_mysql_query(connection, buffer);
 
           // * register successfully
           sendto(udp_socket, "Register Successfully\n",

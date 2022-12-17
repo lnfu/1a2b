@@ -24,7 +24,9 @@ void execute_mysql_query_and_print(MYSQL *connection, const char *query) {
   MYSQL_ROW row;
 
   // * MySQL query
-  printf("Querying [%s]... ", query);
+  printf("%s\n", query);
+  printf("Querying... ");
+
   if (mysql_query(connection, query)) {
     fprintf(stderr, "%s\n", mysql_error(connection));
     mysql_close(connection);
@@ -40,12 +42,12 @@ void execute_mysql_query_and_print(MYSQL *connection, const char *query) {
     printf("%s %s %s %s\n", row[0], row[1], row[2], row[3], row[4],
            row[5]);  // ! careful the number of column
   }
-  printf("done\n");
+  printf("---- end ----\n\n");
 
   mysql_free_result(result);
 }
 
-void mysql_query_data(MYSQL *connection, const char *query) {
+void execute_mysql_query(MYSQL *connection, const char *query) {
   printf("%s\n", query);
   printf("Querying... ");
 
@@ -58,7 +60,11 @@ void mysql_query_data(MYSQL *connection, const char *query) {
   printf("done\n");
 }
 
-int mysql_query_data_number_of_result(MYSQL *connection, const char *query) {
+int get_mysql_query_result_row_count(MYSQL *connection, const char *query) {
+  MYSQL_RES *result;
+  MYSQL_ROW row;
+
+  // * MySQL query
   printf("%s\n", query);
   printf("Querying... ");
 
@@ -67,4 +73,11 @@ int mysql_query_data_number_of_result(MYSQL *connection, const char *query) {
     mysql_close(connection);
     exit(1);
   }
+  printf("done\n");
+
+  result = mysql_store_result(connection);
+  int query_result_row_count = mysql_num_rows(result);
+  mysql_free_result(result);
+
+  return query_result_row_count;
 }
