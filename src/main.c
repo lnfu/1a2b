@@ -154,8 +154,8 @@ int main(int argc, char *argv[]) {
         //
         // TODO: list users (list_rooms_and_users_sample)
         if (strncmp(buffer, "list users", strlen("list users")) == 0) {
-          mysql_query_data_and_print(connection,
-                                     "SELECT * FROM users ORDER BY username;");
+          mysql_query_data_and_print_results(
+              connection, "SELECT * FROM users ORDER BY username;");
           continue;
         }
 
@@ -163,7 +163,8 @@ int main(int argc, char *argv[]) {
         //
         // TODO: list rooms (list_rooms_and_users_sample)
         if (strncmp(buffer, "list rooms", strlen("list rooms")) == 0) {
-          mysql_query_data_and_print(connection, "SELECT * FROM rooms;");
+          mysql_query_data_and_print_results(connection,
+                                             "SELECT * FROM rooms;");
           continue;
         }
 
@@ -209,7 +210,7 @@ int main(int argc, char *argv[]) {
   }
 
   // // MySQL query
-  // mysql_query_data_and_print(connection, "show tables");
+  // mysql_query_data_and_print_results(connection, "show tables");
 
   // * socket close
   close(tcp_socket_for_listen);
