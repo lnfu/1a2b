@@ -1,3 +1,5 @@
+#define QUERY_SIZE 256
+
 #include <mysql/mysql.h>
 #include <stdio.h>
 #include <stdlib.h>  // exit(1)
@@ -80,4 +82,31 @@ int get_mysql_query_result_row_count(MYSQL *connection, const char *query) {
   mysql_free_result(result);
 
   return query_result_row_count;
+}
+
+unsigned int get_room_id_for_online_fd(MYSQL *connection, int online_fd) {
+  MYSQL_RES *result;
+  MYSQL_ROW row;
+
+  // * MySQL query
+  char query[QUERY_SIZE] = { 0 };
+  sprintf(query, "SELECT roomid FROM users WHERE onlinefd=%d", online_fd);
+  printf("%s\n", query);
+  printf("Querying... ");
+
+  if (mysql_query(connection, query)) {
+    fprintf(stderr, "%s\n", mysql_error(connection));
+    mysql_close(connection);
+    exit(1);
+  }
+  printf("done\n");
+
+  result = mysql_use_result(connection);
+  row = mysql_fetch_row(result);
+  unsigned int room_id = 0;
+  sscanf(row[0], "%u", room_id);
+  
+  mysql_free_result(result);
+
+  return room_id;
 }

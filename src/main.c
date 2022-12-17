@@ -4,6 +4,7 @@
 #define USERNAME_SIZE 256
 #define EMAIL_SIZE 256
 #define PASSWORD_SIZE 256
+#define QUERY_SIZE 256
 
 #include <arpa/inet.h>
 #include <mysql/mysql.h>
@@ -106,9 +107,9 @@ int main(int argc, char *argv[]) {
 
           sscanf(buffer, "register %s %s %s", username, email, password);
 
-          // TODO: encapsulation
           printf("Checking same name and same email... ");
 
+          // TODO: encapsulation
           memset(buffer, 0, BUFFER_SIZE);
           sprintf(
               buffer,
@@ -191,17 +192,61 @@ int main(int argc, char *argv[]) {
           //
           // TODO: login <username> <password> (login_sample)
           if (strncmp(buffer, "login", strlen("login")) == 0) {
-            // TODO: check username exist
-            // TODO: check already login at this socket
+            // TODO: parser username and password
+            char username[USERNAME_SIZE] = { 0 };
+            char password[PASSWORD_SIZE] = { 0 };
+            sscanf(buffer, "login %s %s", username, password);
+
+            char query[QUERY_SIZE] = { 0 };
+            // * check username exist
+            // TODO: return message
+            memset(query, 0, QUERY_SIZE);
+            sprintf(query, "SELECT * FROM users WHERE username='%s'", username);
+            if (get_mysql_query_result_row_count(connection, query) == 0) {
+              // cannot find username!
+              printf("CANNOT FIND THIS USERNAME %s\n", username);
+              continue;
+            }
+            
+            // * check already login at this socket
+            // TODO: return message
+            memset(query, 0, QUERY_SIZE);
+            sprintf(query, "SELECT * FROM users WHERE onlinefd=%d", epoll_events[i].data.fd);
+            if (get_mysql_query_result_row_count(connection, query) != 0) {
+              // already login in this socket file descriptor
+              printf("ALREADY LOGIN IN THIS SOCKET (fd = %d)\n", epoll_events[i].data.fd);
+              continue;
+            }
+
             // TODO: check someone already login as this username
+            memset(query, 0, QUERY_SIZE);
+            sprintf(query, "SELECT onlinefd FROM users WHERE username='%s'", username);
+            // TODO
+
             // TODO: check password is correct
+            memset(query, 0, QUERY_SIZE);
+            sprintf(query, "SELECT userpassword FROM users WHERE username='%s'", username);
+            // TODO
           }
 
           //
           //
           // TODO: logout (logout_sample)
           if (strncmp(buffer, "logout", strlen("logout")) == 0) {
-            ;
+            char query[QUERY_SIZE] = { 0 };
+            // TODO: check login
+            memset(query, 0, QUERY_SIZE);
+            sprintf(query, "SELECT * FROM users WHERE onlinefd=%d", epoll_events[i].data.fd);
+            if (get_mysql_query_result_row_count(connection, query) == 0) {
+              // NOT LOGIN YET
+              printf("NOT LOGIN YET\n");
+              continue;
+            }
+
+            // TODO: check in room
+            memset(query, 0, QUERY_SIZE);
+            sprintf(query, "SELECT roomid FROM users WHERE onlinefd=%d", epoll_events[i].data.fd);
+            // get room id
           }
         }
       }
