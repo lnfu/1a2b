@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS users (
     roomid BIGINT
 );
 CREATE TABLE IF NOT EXISTS rooms (
-	id BIGINT,
+	id BIGINT NOT NULL PRIMARY KEY,
     class SMALLINT, -- public (1) / private (0)
     code VARCHAR(255), -- password
     host INT, -- users.userid

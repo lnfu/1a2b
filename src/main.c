@@ -421,6 +421,9 @@ int main(int argc, char *argv[]) {
               write(epoll_events[i].data.fd, fail_message, ROW_SIZE);
               continue;
             }
+            mysql_free_result(result);
+
+
 
             // 看有沒有重複 roomid
             memset(query, 0, QUERY_SIZE);
@@ -449,10 +452,112 @@ int main(int argc, char *argv[]) {
 
 
           if (strncmp(buffer, "join room", strlen("join room")) == 0) {
-            ;
+            
+            
+            // parser room id
+            unsigned int room_id;
+            sscanf(buffer, "join room %u", room_id);
+
+            char username[USERNAME_SIZE] = { 0 }; // current username
+
+            char query[QUERY_SIZE] = { 0 };
+            // 從 database 的 users table 找出和當前 fd match 的 roomid
+            // not login Fail(1)
+            // in room Fail(2)
+            memset(query, 0, QUERY_SIZE);
+            sprintf(query, "SELECT roomid, username FROM users WHERE onlinefd=%d", epoll_events[i].data.fd);
+            execute_mysql_query(query);
+
+            MYSQL_RES *result = mysql_use_result(connection);
+            MYSQL_ROW row = mysql_fetch_row(result);
+
+            if (row == NULL) { // Fail(1)
+              write(epoll_events[i].data.fd, "You are not logged in", strlen("You are not logged in"));
+              continue;
+            }
+            if (row[0] != ?????) { // Fail(2)
+              char fail_message[ROW_SIZE] = { 0 };
+              sprintf(fail_message, "You are already in game room %s, please leave game room", row[0]);
+              write(epoll_events[i].data.fd, fail_message, ROW_SIZE);
+              continue;
+            }
+            sprintf(username, "%s", row[1]);
+            mysql_free_result(result);
+
+
+            // 從 database 的 rooms table 找和 room_id match 的 id & class & round
+            memset(query, 0, QUERY_SIZE);
+            sprintf(query, "SELECT id, class, round FROM rooms WHERE id=%u", room_id);
+            execute_mysql_query(query);
+            
+            MYSQL_RES *result = mysql_use_result(connection);
+            MYSQL_ROW row = mysql_fetch_row(result);
+            if (row == NULL) {
+              char fail_message[ROW_SIZE] = { 0 };
+              sprintf(fail_message, "Game room %u is not exist", room_id);
+              write(epoll_events[i].data.fd, fail_message, ROW_SIZE);
+              continue;
+            }
+            if (strcmp(row[1], "0") == 0) { // 如果 class = 0 代表是 private room
+              write(epoll_events[i].data.fd, "Game room is private, please join game by invitation code", strlen("Game room is private, please join game by invitation code"));
+              continue;
+            }
+            if (strcat(row[2], "0") != 0) { // 如果 round 不是 0, 代表遊戲進行中
+              write(epoll_events[i].data.fd, "Game has started, you can't join now", strlen("Game has started, you can't join now"));
+              continue;
+            }
+            mysql_free_result(result);
+
+            // success
+            // You join game room <game room id>
+            char success_message[ROW_SIZE] = { 0 };
+            sprintf(success_message, "You join game room %u", room_id);
+            write(epoll_events[i].data.fd, success_message, ROW_SIZE);
+
+            // send to others in the room
+            memset(query, 0, QUERY_SIZE);
+            sprintf(query, "SELECT onlinefd FROM users WHERE roomid=%u", room_id);
+            execute_mysql_query(connection, query);
+            result = mysql_use_result(result);
+            while ((row = mysql_fetch_row(result)) != NULL) {
+              int other_user_in_room;
+              sscanf(row[0], "%d", other_user_in_room);
+
+              char temp[ROW_SIZE] = { 0 };
+              sscanf(temp, "Welcome, %s to game!", username);
+              write(other_user_in_room, temp, ROW_SIZE);
+            }
+
+            // TODO: 更改 users table 中現在 user 的 room_id
+
+
+
+
+
+
           }
 
-
+          if (strncmp(buffer, "invite", strlen("invite")) == 0) {
+            ;
+          }
+          if (strncmp(buffer, "list invitations", strlen("list invitations")) == 0) {
+            ;
+          }
+          if (strncmp(buffer, "accept", strlen("accept")) == 0) {
+            ;
+          }
+          if (strncmp(buffer, "leave room", strlen("leave room")) == 0) {
+            ;
+          }
+          if (strncmp(buffer, "start game", strlen("start game")) == 0) {
+            ;
+          }
+          if (strncmp(buffer, "guess", strlen("guess")) == 0) {
+            ;
+          }
+          if (strncmp(buffer, "exit", strlen("exit")) == 0) {
+            ;
+          }
 
 
 
