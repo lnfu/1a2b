@@ -21,6 +21,19 @@ void mysql_connect_remote_database(MYSQL *connection, char *ip_address,
   printf("done\n");
 }
 
+void execute_mysql_query(MYSQL *connection, const char *query) {
+  // printf("%s\n", query);
+  // printf("Querying... ");
+
+  if (mysql_query(connection, query)) {
+    fprintf(stderr, "%s\n", mysql_error(connection));
+    mysql_close(connection);
+    exit(1);
+  }
+
+  // printf("done\n");
+}
+
 void execute_mysql_query_and_print(MYSQL *connection, const char *query,
                                    const int column) {
   // * MySQL query
@@ -39,19 +52,6 @@ void execute_mysql_query_and_print(MYSQL *connection, const char *query,
   printf("---- end of results ----\n\n");
 
   mysql_free_result(result);
-}
-
-void execute_mysql_query(MYSQL *connection, const char *query) {
-  printf("%s\n", query);
-  printf("Querying... ");
-
-  if (mysql_query(connection, query)) {
-    fprintf(stderr, "%s\n", mysql_error(connection));
-    mysql_close(connection);
-    exit(1);
-  }
-
-  printf("done\n");
 }
 
 int get_mysql_query_result_row_count(MYSQL *connection, const char *query) {
@@ -108,7 +108,7 @@ void register_user(MYSQL *connection, const char *username, const char *email,
 
   char query[QUERY_SIZE] = {0};
   sprintf(query,
-          "INSERT INTO users (username, useremail, userpassword) "
+          "INSERT INTO users (username, email, passwd) "
           "VALUES ('%s', '%s', '%s');",
           username, email, passwd);
   execute_mysql_query(connection, query);

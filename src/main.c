@@ -99,7 +99,7 @@ int main(int argc, char *argv[]) {
         char buffer[BUFFER_SIZE] = {0};
         recvfrom(udp_socket, buffer, BUFFER_SIZE, 0,
                  (struct sockaddr *)&client_address, &client_address_size);
-        printf("%s\n", buffer);
+        printf("\033[0;32m%s\n\033[0m", buffer);
 
         // register (register_sample)
         if (strncmp(buffer, "register", strlen("register")) == 0) {
@@ -112,8 +112,8 @@ int main(int argc, char *argv[]) {
 
           // check unique username and email
           printf("Checking unique username and same email... ");
-          if (!username_and_email_are_unique(username, email)) {
-            printf("\nSame name or email! num_rows = %d\n\n", num_rows);
+          if (!username_and_email_are_unique(connection, username, email)) {
+            printf("\nSame name or email!\n\n");
             sendto(udp_socket, "Username or Email is already used\n",
                    strlen("Username or Email is already used\n"), 0,
                    (struct sockaddr *)&client_address, client_address_size);
@@ -122,7 +122,7 @@ int main(int argc, char *argv[]) {
           printf("done\n");
 
           // register a new user and return successful message
-          register_user(username, email, passwd);
+          register_user(connection, username, email, passwd);
           sendto(udp_socket, "Register Successfully\n",
                  strlen("Register Successfully\n"), 0,
                  (struct sockaddr *)&client_address, client_address_size);
@@ -221,7 +221,7 @@ int main(int argc, char *argv[]) {
           epoll_ctl(epoll_fd, EPOLL_CTL_DEL, epoll_events[i].data.fd,
                     NULL);                 // delete from epoll
           close(epoll_events[i].data.fd);  // socket close
-          printf("closed client: %d\n", epoll_events[i].data.fd);
+          printf("closed client: %d\n\n", epoll_events[i].data.fd);
 
         } else {
           // // login <username> <password> (login_sample)

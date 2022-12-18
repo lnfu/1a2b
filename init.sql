@@ -6,8 +6,8 @@ CREATE TABLE IF NOT EXISTS users (
     username VARCHAR(255),
     email VARCHAR(255),
     passwd VARCHAR(255),
-    onlinefd INT,
-    roomid BIGINT
+    online_fd INT,
+    room_id BIGINT
 );
 CREATE TABLE IF NOT EXISTS rooms (
 	id BIGINT NOT NULL PRIMARY KEY,
