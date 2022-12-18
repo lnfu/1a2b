@@ -21,30 +21,22 @@ void mysql_connect_remote_database(MYSQL *connection, char *ip_address,
   printf("done\n");
 }
 
-void execute_mysql_query_and_print(MYSQL *connection, const char *query) {
-  MYSQL_RES *result;
-  MYSQL_ROW row;
-
+void execute_mysql_query_and_print(MYSQL *connection, const char *query,
+                                   const int column) {
   // * MySQL query
-  printf("%s\n", query);
-  printf("Querying... ");
-
-  if (mysql_query(connection, query)) {
-    fprintf(stderr, "%s\n", mysql_error(connection));
-    mysql_close(connection);
-    exit(1);
-  }
-  printf("done\n");
-
+  execute_mysql_query(connection, query);
   printf("Print results... ");
-  result = mysql_use_result(connection);
+  MYSQL_RES *result = mysql_use_result(connection);
+  MYSQL_ROW row;
 
   // * MySQL print results
   while ((row = mysql_fetch_row(result)) != NULL) {
-    printf("%s %s %s %s\n", row[0], row[1], row[2], row[3], row[4],
-           row[5]);  // ! careful the number of column
+    for (int i = 0; i < column; i++) {
+      printf("%s ", row[i]);
+    }
+    printf("\n");
   }
-  printf("---- end ----\n\n");
+  printf("---- end of results ----\n\n");
 
   mysql_free_result(result);
 }
@@ -63,85 +55,63 @@ void execute_mysql_query(MYSQL *connection, const char *query) {
 }
 
 int get_mysql_query_result_row_count(MYSQL *connection, const char *query) {
-  MYSQL_RES *result;
-  MYSQL_ROW row;
-
   // * MySQL query
-  printf("%s\n", query);
-  printf("Querying... ");
+  execute_mysql_query(connection, query);
 
-  if (mysql_query(connection, query)) {
-    fprintf(stderr, "%s\n", mysql_error(connection));
-    mysql_close(connection);
-    exit(1);
-  }
-  printf("done\n");
-
-  result = mysql_store_result(connection);
+  MYSQL_RES *result = mysql_store_result(connection);
   int query_result_row_count = mysql_num_rows(result);
   mysql_free_result(result);
 
   return query_result_row_count;
 }
 
-unsigned int get_room_id_for_online_fd(MYSQL *connection, int online_fd) {
-  MYSQL_RES *result;
-  MYSQL_ROW row;
-
-  // * MySQL query
-  char query[QUERY_SIZE] = { 0 };
+unsigned int get_room_id_for_online_fd(MYSQL *connection, const int online_fd) {
+  char query[QUERY_SIZE] = {0};
   sprintf(query, "SELECT roomid FROM users WHERE onlinefd=%d", online_fd);
-  printf("%s\n", query);
-  printf("Querying... ");
+  execute_mysql_query(connection, query);
 
-  if (mysql_query(connection, query)) {
-    fprintf(stderr, "%s\n", mysql_error(connection));
-    mysql_close(connection);
-    exit(1);
+  MYSQL_RES *result = mysql_use_result(connection);
+  MYSQL_ROW row = mysql_fetch_row(result);
+
+  if (row == NULL) {
+    // not in room!
+    printf("THIS USER IS NOT IN A ROOM\n");
+    return 0;
   }
-  printf("done\n");
 
-  result = mysql_use_result(connection);
-  row = mysql_fetch_row(result);
   unsigned int room_id = 0;
   sscanf(row[0], "%u", room_id);
-  
+
   mysql_free_result(result);
 
   return room_id;
 }
 
+bool username_and_email_are_unique(MYSQL *connection, const char *username,
+                                   const char *email) {
+  char query[QUERY_SIZE] = {0};
+  sprintf(query, "SELECT * FROM users WHERE username = '%s' OR email='%s';",
+          username, email);
 
-bool username_and_email_are_unique(char *username, char *email) {
-  char query[QUERY_SIZE] = { 0 };
-  sprintf(
-      query,
-      "SELECT * FROM users WHERE username = '%s' OR email='%s';",
-      username, email);
+  execute_mysql_query(connection, query);
 
-  if (mysql_query(connection, buffer)) {
-    fprintf(stderr, "%s\n", mysql_error(connection));
-    mysql_close(connection);
-    exit(1);
-  }
-
-  MYSQL_RES *result;
-  result = mysql_store_result(connection);
+  MYSQL_RES *result = mysql_store_result(connection);
   int row_count = mysql_num_rows(result);
   mysql_free_result(result);
 
   return (row_count == 0);
 }
 
-void register_user(char *username, char *email, char *passwd) {
+void register_user(MYSQL *connection, const char *username, const char *email,
+                   const char *passwd) {
   printf("Register a new user... ");
 
-  char query[QUERY_SIZE] = { 0 };
+  char query[QUERY_SIZE] = {0};
   sprintf(query,
           "INSERT INTO users (username, useremail, userpassword) "
           "VALUES ('%s', '%s', '%s');",
           username, email, passwd);
   execute_mysql_query(connection, query);
 
-  printf("done\n"):
+  printf("done\n");
 }
