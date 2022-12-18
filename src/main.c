@@ -1,10 +1,11 @@
 #define PORT 9999
 #define EPOLL_SIZE 50
-#define BUFFER_SIZE 256
+#define BUFFER_SIZE 1024
 #define USERNAME_SIZE 256
 #define EMAIL_SIZE 256
 #define PASSWORD_SIZE 256
 #define QUERY_SIZE 256
+#define ROW_SIZE 64
 
 #include <arpa/inet.h>
 #include <mysql/mysql.h>
@@ -18,6 +19,15 @@
 #include "../include/error.h"
 #include "../include/mysql.h"
 #include "../include/network.h"
+
+
+
+
+int is_string_match(const char *buffer, const char *keyword) {
+  return (strncmp(buffer, keyword, strlen(keyword)) == 0);
+}
+
+
 
 int main(int argc, char *argv[]) {
   // *
@@ -96,38 +106,18 @@ int main(int argc, char *argv[]) {
                  (struct sockaddr *)&client_address, &client_address_size);
         printf("%s\n", buffer);
 
-        // *
-        // *
-        // * register (register_sample)
+        // register (register_sample)
         if (strncmp(buffer, "register", strlen("register")) == 0) {
-          // * parse data
+          // parse data
           char username[USERNAME_SIZE] = {0};
           char email[EMAIL_SIZE] = {0};
-          char password[PASSWORD_SIZE] = {0};
+          char passwd[PASSWORD_SIZE] = {0};
 
-          sscanf(buffer, "register %s %s %s", username, email, password);
+          sscanf(buffer, "register %s %s %s", username, email, passwd);
 
-          printf("Checking same name and same email... ");
-
-          // TODO: encapsulation
-          memset(buffer, 0, BUFFER_SIZE);
-          sprintf(
-              buffer,
-              "SELECT * FROM users WHERE username = '%s' OR useremail='%s';",
-              username, email);
-
-          if (mysql_query(connection, buffer)) {
-            fprintf(stderr, "%s\n", mysql_error(connection));
-            mysql_close(connection);
-            exit(1);
-          }
-
-          MYSQL_RES *result;
-          result = mysql_store_result(connection);
-          int num_rows = mysql_num_rows(result);
-          mysql_free_result(result);
-
-          if (num_rows > 0) {
+          // check unique username and email
+          printf("Checking unique username and same email... ");
+          if (!username_and_email_are_unique(username, email)) {
             printf("\nSame name or email! num_rows = %d\n\n", num_rows);
             sendto(udp_socket, "Username or Email is already used\n",
                    strlen("Username or Email is already used\n"), 0,
@@ -136,118 +126,339 @@ int main(int argc, char *argv[]) {
           }
           printf("done\n");
 
-          // * insert user data
-          memset(buffer, 0, BUFFER_SIZE);
-          sprintf(buffer,
-                  "INSERT INTO users (username, useremail, userpassword) "
-                  "VALUES ('%s', '%s', '%s');",
-                  username, email, password);
-          execute_mysql_query(connection, buffer);
-
-          // * register successfully
+          // register a new user and return successful message
+          register_user(username, email, passwd);
           sendto(udp_socket, "Register Successfully\n",
                  strlen("Register Successfully\n"), 0,
                  (struct sockaddr *)&client_address, client_address_size);
           printf("\n");
         }
 
-        //
-        //
-        // TODO: list users (list_rooms_and_users_sample)
+        // list users (list_rooms_and_users_sample)
         if (strncmp(buffer, "list users", strlen("list users")) == 0) {
-          execute_mysql_query_and_print(
-              connection, "SELECT * FROM users ORDER BY username;");
-          continue;
+
+          memset(buffer, 0, BUFFER_SIZE);
+          strcat(buffer, "List Users\n");
+
+          // no users
+          if (get_mysql_query_result_row_count(connection, "SELECT * FROM users;") == 0) {
+            strcat(buffer, "No Users\n");
+            sendto(udp_socket, buffer, BUFFER_SIZE, 0, (struct sockaddr *)&client_address, client_address_size);
+            printf("\n");
+            continue;
+          }
+
+          // query
+          execute_mysql_query(connection, "SELECT username, email, onlinefd FROM users ORDER BY username;");
+
+          MYSQL_RES *result = mysql_use_result(connection);
+          MYSQL_ROW row;
+
+          // fetch result
+          int count = 0;
+          while ((row = mysql_fetch_row(result)) != NULL) {
+            count++;
+            char temp[ROW_SIZE];
+            // ! 確認一下 onlinefd 沒有值的時候 row[2] 會是甚麼?
+            sprintf(temp, "%d. %s<%s> %s\n", count, row[0], row[1], row[2] != 0 ? "Online" : "Offline");
+            strcat(buffer, temp);
+          }
+          mysql_free_result(result);
+
+          // return message
+          sendto(udp_socket, buffer, BUFFER_SIZE, 0, (struct sockaddr *)&client_address, client_address_size);
+          printf("\n");
+
         }
 
-        //
-        //
-        // TODO: list rooms (list_rooms_and_users_sample)
+        // list rooms (list_rooms_and_users_sample)
         if (strncmp(buffer, "list rooms", strlen("list rooms")) == 0) {
-          execute_mysql_query_and_print(connection,
-                                             "SELECT * FROM rooms;");
-          continue;
+
+          memset(buffer, 0, BUFFER_SIZE);
+          strcat(buffer, "List Game Rooms\n");
+
+          // no users
+          if (get_mysql_query_result_row_count(connection, "SELECT * FROM users;") == 0) {
+            strcat(buffer, "No Rooms\n");
+            sendto(udp_socket, buffer, BUFFER_SIZE, 0, (struct sockaddr *)&client_address, client_address_size);
+            printf("\n");
+            continue;
+          }
+
+          // query
+          execute_mysql_query(connection, "SELECT class, id, round FROM rooms ORDER BY id;");
+
+          MYSQL_RES *result = mysql_use_result(connection);
+          MYSQL_ROW row;
+
+          // fetch result
+          int count = 0;
+          while ((row = mysql_fetch_row(result)) != NULL) {
+            count++;
+            char temp[ROW_SIZE];
+            // ! careful about the strcmp
+            sprintf(temp, "%d. (%s) Game Room %s %s\n", count, (strcmp(row[0], "1") == 0) ? "Public" : "Private", row[1], (strcmp(row[2], "0") == 0) ? "is open for players" : "has started playing");
+            strcat(buffer, temp);
+          }
+          mysql_free_result(result);
+
+          // return message
+          sendto(udp_socket, buffer, BUFFER_SIZE, 0, (struct sockaddr *)&client_address, client_address_size);
+          printf("\n");
+
+
         }
 
       } else if (epoll_events[i].data.fd == tcp_socket_for_listen) {
-        // *
-        // *
-        // * accept new user
+        // accept new user
         accept_tcp_connection(tcp_socket_for_listen, epoll_fd);
 
       } else {
-        // TODO: TCP data transfer
         char buffer[BUFFER_SIZE] = {0};
         int data_len = read(epoll_events[i].data.fd, buffer,
                             BUFFER_SIZE);  // read data from tcp socket
 
         if (data_len == 0) {
-          // TODO: close request
+          // close request
           epoll_ctl(epoll_fd, EPOLL_CTL_DEL, epoll_events[i].data.fd,
                     NULL);                 // delete from epoll
           close(epoll_events[i].data.fd);  // socket close
           printf("closed client: %d\n", epoll_events[i].data.fd);
+
+
         } else {
-          //
-          //
-          // TODO: login <username> <password> (login_sample)
+          // login <username> <password> (login_sample)
           if (strncmp(buffer, "login", strlen("login")) == 0) {
-            // TODO: parser username and password
+            // parser username and password
             char username[USERNAME_SIZE] = { 0 };
-            char password[PASSWORD_SIZE] = { 0 };
-            sscanf(buffer, "login %s %s", username, password);
+            char passwd[PASSWORD_SIZE] = { 0 };
+            sscanf(buffer, "login %s %s", username, passwd);
 
             char query[QUERY_SIZE] = { 0 };
-            // * check username exist
-            // TODO: return message
+
+            // 從 database 找出 match 的 username
+            // 如果找不到 Fail(1) Username does not exist
+            // 如果找到但是有 online fd Fail(3) Someone already logged in as <username>
+            // 如果找到且沒有 online fd 但是 password 不 match Fail(4) Wrong password
             memset(query, 0, QUERY_SIZE);
-            sprintf(query, "SELECT * FROM users WHERE username='%s'", username);
-            if (get_mysql_query_result_row_count(connection, query) == 0) {
-              // cannot find username!
-              printf("CANNOT FIND THIS USERNAME %s\n", username);
+            sprintf(query, "SELECT username, onlinefd, passwd FROM users WHERE username='%s'", username);
+            execute_mysql_query(connection, query);
+
+            MYSQL_RES *result = mysql_use_result(connection);
+            MYSQL_ROW row = mysql_fetch_row(result)
+            if (row == NULL) { // Fail(1)
+              write(epoll[i].data.fd, "Username does not exist", strlen("Username does not exist"));
               continue;
             }
+            if (row[1] != none???) { // Fail(3) // TODO
+              write();
+              continue;
+            }
+            if (strcmp(row[2], passwd) != 0) { // Fail(4)
+              write(epoll[i].data.fd, "Wrong password", strlen("Wrong password"));
+              continue;
+            }
+            mysql_free_result(result);
+
+
+
+
+            // 從 database 找出 match 的 onlinefd
+            // 如果找到 Fail(2) You already logged in as <username>
+            memset(query, 0, QUERY_SIZE);
+            sprintf(query, "SELECT username FROM users WHERE onlinefd=%d", epoll_events[i].data.fd);
+            execute_mysql_query(connection, query);
             
-            // * check already login at this socket
-            // TODO: return message
-            memset(query, 0, QUERY_SIZE);
-            sprintf(query, "SELECT * FROM users WHERE onlinefd=%d", epoll_events[i].data.fd);
-            if (get_mysql_query_result_row_count(connection, query) != 0) {
-              // already login in this socket file descriptor
-              printf("ALREADY LOGIN IN THIS SOCKET (fd = %d)\n", epoll_events[i].data.fd);
+            MYSQL_RES *result = mysql_use_result(connection);
+            MYSQL_ROW row = mysql_fetch_row(result)
+            if (row != NULL) { // Fail(2) // TODO
+              write();
               continue;
             }
+            mysql_free_result(result);
 
-            // TODO: check someone already login as this username
-            memset(query, 0, QUERY_SIZE);
-            sprintf(query, "SELECT onlinefd FROM users WHERE username='%s'", username);
-            // TODO
 
-            // TODO: check password is correct
-            memset(query, 0, QUERY_SIZE);
-            sprintf(query, "SELECT userpassword FROM users WHERE username='%s'", username);
-            // TODO
+
+            // login successfully
+            // TODO: 更改 database 的 onlinefd 數值
+
+            // return successful message
+            char success_message[ROW_SIZE] = { 0 };
+            sprintf(success_message, "Welcome, %s", username);
+            write(epoll_events[i].data.fd, success_message, ROW_SIZE);
+
           }
 
-          //
-          //
-          // TODO: logout (logout_sample)
+
+
+
+
+          // logout (logout_sample)
           if (strncmp(buffer, "logout", strlen("logout")) == 0) {
+
+            // 在 database 的 users table 找出和當前 fd match 的 roomid
+            // check login Fail(1)
+            // check in room Fail(2)
             char query[QUERY_SIZE] = { 0 };
-            // TODO: check login
-            memset(query, 0, QUERY_SIZE);
-            sprintf(query, "SELECT * FROM users WHERE onlinefd=%d", epoll_events[i].data.fd);
-            if (get_mysql_query_result_row_count(connection, query) == 0) {
-              // NOT LOGIN YET
-              printf("NOT LOGIN YET\n");
+            sprintf(query, "SELECT username, roomid FROM users WHERE onlinefd=%d", epoll_events[i].data.fd);
+            execute_mysql_query(connection, query);
+            MYSQL_RES *result = mysql_use_result(connection);
+            MYSQL_ROW row = mysql_fetch_row(result)
+            if (row == NULL) {
+              write(epoll_events[i].data.fd, "You are not logged in", strlen(You are not logged in));
+              continue;
+            }
+            if (row[1] != ?????) {
+              char temp[ROW_SIZE] = { 0 };
+              sprintf(temp, "You are already in game room %s, please leave game room", row[1]);
+              write(epoll_events[i].data.fd, temp, ROW_SIZE);
               continue;
             }
 
-            // TODO: check in room
+            // logout successfully
+            // TODO: 修改 database 的 users table 裡面和當前 fd match 的 onlinefd 為 none
+
+            // return successful message
+            // Goodbye, <username>
+            char success_message[ROW_SIZE] = { 0 };
+            sprintf(success_message, "Goodbye, %s", row[0]);
+            write(epoll_events[i].data.fd, success_message, ROW_SIZE);
+
+            mysql_free_result(result); // 用完 row[0] 才 free !
+
+          }
+
+
+
+
+
+
+          // create public room
+          if (strncmp(buffer, "create public room", strlen("create public room")) == 0) {
+            
+            
+            // parser game room id
+            unsigned int roomid = 0;
+            sscanf(buffer, "create public room %u", roomid);
+
+            char query[QUERY_SIZE] = { 0 };
+            // 從 database 的 users table 找和當前 fd match 的 online fd 的 roomid
+            // check login Fail(1)
+            // check already in room Fail(2)
+            memset(query, 0, QUERY_SIZE);
+            sprintf(query, "SELECT roomid, id FROM users WHERE onlinefd=%d", epoll_events[i].data.fd);
+            execute_mysql_query(connection, query);
+
+            MYSQL_RES *result = mysql_use_result(connection);
+            MYSQL_ROW row = mysql_fetch_row(result);
+            if (row == NULL) { // Fail(1)
+              write(epoll_events[i].data.fd, "You are not logged in", strlen("You are not logged in"));
+              continue;
+            }
+            if (row[0] != ???) { // Fail(2)
+              char fail_message[ROW_SIZE] = { 0 };
+              sprintf(fail_message, "You are already in game room %s, please leave game room", row[0]);
+              write(epoll_events[i].data.fd, fail_message, ROW_SIZE);
+              continue;
+            }
+            mysql_free_result(result);
+
+
+            // 看有沒有重複 roomid
+            memset(query, 0, QUERY_SIZE);
+            sprintf(query, "SELECT * FROM rooms WHERE id=%u", roomid);
+            if (get_mysql_query_result_row_count(connection, query) != 0) {
+              write(epoll_events[i].data.fd, "Game room ID is used, choose another one", strlen("Game room ID is used, choose another one"));
+              continue;
+            }
+
+
+
+            // create public room successfully
+            // TODO: 在 rooms table 新增 id 為 roomid 的房間並把 host 設為 row[1] 以及 class 設為 1 (public)
+            // TODO: 在 users table 和當前 fd match 的玩家的 roomid 設為 roomid
+
+            // return successful message
+            char success_message[ROW_SIZE] = { 0 };
+            sprintf(success_message, "You create public game room %u", roomid);
+            write(epoll_events[i].data.fd, success_message, ROW_SIZE);
+
+
+          }
+
+
+
+
+
+
+
+          if (strncmp(buffer, "create private room", strlen("create private room")) == 0) {
+            
+            
+            // parser room_id and room_code
+            unsigned int room_id, room_code;
+            sscanf(buffer, "create private room %u %u", room_id, room_code);
+
+
+            char query[QUERY_SIZE] = { 0 };
+            // 從 database 的 users table 找出和當前 fd match 的 roomid
+            // not login Fail(1)
+            // in room Fail(2)
             memset(query, 0, QUERY_SIZE);
             sprintf(query, "SELECT roomid FROM users WHERE onlinefd=%d", epoll_events[i].data.fd);
-            // get room id
+            execute_mysql_query(query);
+
+            MYSQL_RES *result = mysql_use_result(connection);
+            MYSQL_ROW row = mysql_fetch_row(result);
+
+            if (row == NULL) { // Fail(1)
+              write(epoll_events[i].data.fd, "You are not logged in", strlen("You are not logged in"));
+              continue;
+            }
+            if (row[0] != ?????) { // Fail(2)
+              char fail_message[ROW_SIZE] = { 0 };
+              sprintf(fail_message, "You are already in game room %s, please leave game room", row[0]);
+              write(epoll_events[i].data.fd, fail_message, ROW_SIZE);
+              continue;
+            }
+
+            // 看有沒有重複 roomid
+            memset(query, 0, QUERY_SIZE);
+            sprintf(query, "SELECT * FROM rooms WHERE id=%u", roomid);
+            if (get_mysql_query_result_row_count(connection, query) != 0) {
+              write(epoll_events[i].data.fd, "Game room ID is used, choose another one", strlen("Game room ID is used, choose another one"));
+              continue;
+            }
+
+
+
+            // create public room successfully
+            // TODO: 在 rooms table 新增 id 為 room_id 的房間並把 host 設為 row[1] 以及 class 設為 0 (private) code 設為 room_code
+            // TODO: 在 users table 和當前 fd match 的玩家的 roomid 設為 room_id
+
+            // return successful message
+            char success_message[ROW_SIZE] = { 0 };
+            sprintf(success_message, "You create private game room %u", room_id);
+            write(epoll_events[i].data.fd, success_message, ROW_SIZE);
+
+
+
+
           }
+
+
+
+          if (strncmp(buffer, "join room", strlen("join room")) == 0) {
+            ;
+          }
+
+
+
+
+
+
+
+
         }
       }
     }

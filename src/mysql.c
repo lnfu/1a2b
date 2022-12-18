@@ -110,3 +110,38 @@ unsigned int get_room_id_for_online_fd(MYSQL *connection, int online_fd) {
 
   return room_id;
 }
+
+
+bool username_and_email_are_unique(char *username, char *email) {
+  char query[QUERY_SIZE] = { 0 };
+  sprintf(
+      query,
+      "SELECT * FROM users WHERE username = '%s' OR email='%s';",
+      username, email);
+
+  if (mysql_query(connection, buffer)) {
+    fprintf(stderr, "%s\n", mysql_error(connection));
+    mysql_close(connection);
+    exit(1);
+  }
+
+  MYSQL_RES *result;
+  result = mysql_store_result(connection);
+  int row_count = mysql_num_rows(result);
+  mysql_free_result(result);
+
+  return (row_count == 0);
+}
+
+void register_user(char *username, char *email, char *passwd) {
+  printf("Register a new user... ");
+
+  char query[QUERY_SIZE] = { 0 };
+  sprintf(query,
+          "INSERT INTO users (username, useremail, userpassword) "
+          "VALUES ('%s', '%s', '%s');",
+          username, email, passwd);
+  execute_mysql_query(connection, query);
+
+  printf("done\n"):
+}
