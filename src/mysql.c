@@ -231,78 +231,6 @@ int get_user_id_if_allowed_to_enter_room(MYSQL *connection, int current_fd) {
 
 
 
-// tell the room class is public or private
-int get_room_class(MYSQL *connection, int room_id) {
-  printf("Check the class of room... ");
-
-
-  // if (room_id_is_unique(connection, room_id)) {
-  //   // room not exist !
-  //   return -1;
-  // }
-
-
-  MYSQL_RES *result;
-  MYSQL_ROW row;
-  char query[QUERY_SIZE] = {0};
-
-
-  sprintf(query, "SELECT class FROM rooms WHERE id=%u", room_id);
-  execute_mysql_query(connection, query);
-  result = mysql_use_result(connection);
-  row = mysql_fetch_row(result);
-
-
-
-  if (strcmp(row[0], "0") == 0) {
-    printf("private\n");
-
-    mysql_free_result(result);
-    return 0;
-  }
-
-  printf("public\n");
-
-  mysql_free_result(result);
-  return 1;
-}
-
-
-
-bool is_game_in_room_in_progress(MYSQL *connection, int room_id) {
-  printf("Check the game in the room is not playing... ");
-
-  // if (room_id_is_unique(connection, room_id)) {
-  //   // room not exist !
-  //   return -1;
-  // }
-
-  MYSQL_RES *result;
-  MYSQL_ROW row;
-  char query[QUERY_SIZE] = {0};
-
-
-  sprintf(query, "SELECT round FROM rooms WHERE id=%u", room_id);
-  execute_mysql_query(connection, query);
-  result = mysql_use_result(connection);
-  row = mysql_fetch_row(result);
-
-
-  if (strcmp(row[0], "0") == 0) {
-    printf("done\n");
-
-    mysql_free_result(result);
-    return false;
-  }
-
-  printf("\nThe game is playing\n\n");
-
-  mysql_free_result(result);
-  return true;
-}
-
-
-
 
 
 // *********************************
@@ -444,6 +372,86 @@ bool room_id_is_unique(MYSQL *connection, const int room_id) {
 
   printf("done\n");
   return true;
+}
+
+
+
+// tell the room class is public or private
+int is_room_public(MYSQL *connection, const int room_id) {
+  MYSQL_RES *result;
+  MYSQL_ROW row;
+  char query[QUERY_SIZE] = {0};
+
+  printf("Check the class of room... ");
+
+  sprintf(query, "SELECT class FROM rooms WHERE id=%u", room_id);
+  execute_mysql_query(connection, query);
+  result = mysql_use_result(connection);
+  row = mysql_fetch_row(result);
+
+
+
+  if (strcmp(row[0], "0") == 0) {
+    printf("private\n");
+
+    mysql_free_result(result);
+    return false;
+  }
+
+  printf("public\n");
+
+  mysql_free_result(result);
+  return true;
+}
+
+bool is_room_start(MYSQL *connection, const int room_id) {
+  MYSQL_RES *result;
+  MYSQL_ROW row;
+  char query[QUERY_SIZE] = {0};
+
+  printf("Check the game in the room is not playing... ");
+
+  sprintf(query, "SELECT round FROM rooms WHERE id=%u", room_id);
+  execute_mysql_query(connection, query);
+  result = mysql_use_result(connection);
+  row = mysql_fetch_row(result);
+
+
+  if (strcmp(row[0], "0") == 0) {
+    printf("done\n");
+
+    mysql_free_result(result);
+    return false;
+  }
+
+  printf("game is playing\n");
+
+  mysql_free_result(result);
+  return true;
+}
+
+
+void send_message_to_others_in_room(MYSQL *connection, const int room_id, const char *message) {
+  MYSQL_RES *result;
+  MYSQL_ROW row;
+  char query[QUERY_SIZE] = {0};
+
+  printf("Sending message to others in the same room... ");
+
+  memset(query, 0, QUERY_SIZE);
+  sprintf(query, "SELECT online_fd FROM users WHERE room_id=%u", room_id);
+  execute_mysql_query(connection, query);
+
+  result = mysql_use_result(connection);
+  while ((row = mysql_fetch_row(result)) != NULL) {
+    int other_user_in_room;
+    sscanf(row[0], "%d", &other_user_in_room);
+    write(other_user_in_room, message, strlen(message));
+  }
+
+  printf("done\n");
+
+  mysql_free_result(result);
 }
 
 
