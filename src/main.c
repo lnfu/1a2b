@@ -305,7 +305,7 @@ int main(int argc, char *argv[]) {
 
 
             // Fail(2) You already logged in as <username>
-            if (!check_current_fd_is_not_logged_in(connection, current_fd, current_login_username)) {
+            if (get_user_id_by_current_fd(connection, current_fd, current_login_username) != 0) {
               char fail_message[ROW_SIZE] = {0};
               sprintf(fail_message, "You already logged in as %s\n", current_login_username);
               write(current_fd, fail_message, strlen(fail_message));
@@ -396,47 +396,63 @@ int main(int argc, char *argv[]) {
 
           // create public room
           if (is_string_match(buffer, "create public room")) {
+            unsigned int input_room_id = 0;
+            unsigned int current_room_id = 0;
+            int user_id = 0;
+            char current_login_username[USERNAME_SIZE] = {0};
+
+
+
+
+
             // parser game room id
-            unsigned int room_id = 0;
-            sscanf(buffer, "create public room %u", &room_id);
+            sscanf(buffer, "create public room %u", &input_room_id);
 
 
-
-
-
-            int user_id = get_user_id_if_allowed_to_enter_room(connection, current_fd);
+            // Fail(1) You are not logged in
+            user_id = get_user_id_by_current_fd(connection, current_fd, current_login_username);
             if (user_id == 0) {
+              write(current_fd, "You are not logged in\n", strlen("You are not logged in\n"));
+
+              printf("Fail(1)\n\n");
               continue;
             }
 
 
+            // Fail(2) You are already in game room <game room id>, please leave game room
+            if (!check_current_fd_is_not_in_room(connection, current_fd, &current_room_id)) {
+              char fail_message[ROW_SIZE] = {0};
+              sprintf(fail_message, "You are already in game room %u, please leave game room\n", current_room_id);
+              write(current_fd, fail_message, strlen(fail_message));
+
+              printf("Fail(2)\n\n");
+              continue;
+            }
 
 
-
-            if (room_id_is_unique(connection, room_id) == false) {
+            // Fail(3) Game room ID is used, choose another one
+            if (!room_id_is_unique(connection, input_room_id)) {
               write(current_fd, "Game room ID is used, choose another one\n", strlen("Game room ID is used, choose another one\n"));
+
+              printf("Fail(3)\n\n");
               continue;
             }
 
 
-
-
-
-            // create public room successfully
+            // Success You create public game room <game room id>
             // 在 rooms table 新增 id 為 room_id 的房間並把 host 設為 row[1] 以及 class 設為 1 (public)
             memset(query, 0, QUERY_SIZE);
-            sprintf(query, "INSERT INTO rooms (id, class, host, round) VALUES (%u, 1, %d, 0);", room_id, user_id);
+            sprintf(query, "INSERT INTO rooms (id, class, host, round) VALUES (%u, 1, %d, 0);", input_room_id, user_id);
             execute_mysql_query(connection, query);
 
             // 在 users table 和當前 fd match 的玩家的 roomid 設為 roomid
             memset(query, 0, QUERY_SIZE);
-            sprintf(query, "UPDATE users SET room_id=%d WHERE online_fd=%d;", room_id, current_fd);
+            sprintf(query, "UPDATE users SET room_id=%d WHERE online_fd=%d;", input_room_id, current_fd);
             execute_mysql_query(connection, query);
-
 
             // return successful message
             char success_message[ROW_SIZE] = {0};
-            sprintf(success_message, "You create public game room %u\n", room_id);
+            sprintf(success_message, "You create public game room %u\n", input_room_id);
             write(current_fd, success_message, strlen(success_message));
 
             printf("\n");
@@ -447,50 +463,65 @@ int main(int argc, char *argv[]) {
 
           // create private room
           if (is_string_match(buffer, "create private room")) {
+            unsigned int input_room_id = 0;
+            unsigned int input_room_code = 0;
+            unsigned int current_room_id = 0;
+            int user_id = 0;
+            char current_login_username[USERNAME_SIZE] = {0};
+
+
+
+
+
             // parser room_id and room_code
-            unsigned int room_id, room_code;
-            sscanf(buffer, "create private room %u %u", &room_id, &room_code);
+            sscanf(buffer, "create private room %u %u", &input_room_id, &input_room_code);
 
 
-
-
-
-            // check user is logged in and not in a room
-            // if not, get the user id in users table
-            int user_id = get_user_id_if_allowed_to_enter_room(connection, current_fd);
+            // Fail(1) You are not logged in
+            user_id = get_user_id_by_current_fd(connection, current_fd, current_login_username);
             if (user_id == 0) {
+              write(current_fd, "You are not logged in\n", strlen("You are not logged in\n"));
+
+              printf("Fail(1)\n\n");
               continue;
             }
 
 
+            // Fail(2) You are already in game room <game room id>, please leave game room
+            if (!check_current_fd_is_not_in_room(connection, current_fd, &current_room_id)) {
+              char fail_message[ROW_SIZE] = {0};
+              sprintf(fail_message, "You are already in game room %u, please leave game room\n", current_room_id);
+              write(current_fd, fail_message, strlen(fail_message));
+
+              printf("Fail(2)\n\n");
+              continue;
+            }
 
 
-
-            if (room_id_is_unique(connection, room_id) == false) {
+            // Fail(3) Game room ID is used, choose another one
+            if (!room_id_is_unique(connection, input_room_id)) {
               write(current_fd, "Game room ID is used, choose another one\n", strlen("Game room ID is used, choose another one\n"));
+
+              printf("Fail(3)\n\n");
               continue;
             }
-
-
-
 
 
             // create public room successfully
             // 在 rooms table 新增 id 為 room_id 的房間並把 host 設為 row[1] 以及 class 設為 1 (public)
             memset(query, 0, QUERY_SIZE);
-            sprintf(query, "INSERT INTO rooms (id, class, host, round, code) VALUES (%u, 0, %d, 0, %u);", room_id, user_id, room_code);
+            sprintf(query, "INSERT INTO rooms (id, class, host, round, code) VALUES (%u, 0, %d, 0, %u);", input_room_id, user_id,
+                    input_room_code);
             execute_mysql_query(connection, query);
 
             // 在 users table 和當前 fd match 的玩家的 roomid 設為 roomid
             memset(query, 0, QUERY_SIZE);
-            sprintf(query, "UPDATE users SET room_id=%d WHERE online_fd=%d;", room_id, current_fd);
+            sprintf(query, "UPDATE users SET room_id=%d WHERE online_fd=%d;", input_room_id, current_fd);
             execute_mysql_query(connection, query);
-
-
 
             // return successful message
             char success_message[ROW_SIZE] = {0};
-            sprintf(success_message, "You create private game room %u\n", room_id);
+            sprintf(success_message, "You create private game room %u\n", input_room_id);
             write(current_fd, success_message, strlen(success_message));
 
             printf("\n");

@@ -230,25 +230,6 @@ int get_user_id_if_allowed_to_enter_room(MYSQL *connection, int current_fd) {
 }
 
 
-// 看有沒有重複 room_id
-// error message will send by tcp connection
-int room_id_is_unique(MYSQL *connection, int room_id) {
-  printf("Check unique room_id... ");
-
-
-  char query[QUERY_SIZE] = {0};
-
-  sprintf(query, "SELECT * FROM rooms WHERE id=%u", room_id);
-  if (get_mysql_query_result_row_count(connection, query) != 0) {
-    printf("find game room ID\n");
-
-    return false;
-  }
-
-  printf("game room ID does not exist\n");
-  return true;
-}
-
 
 // tell the room class is public or private
 int get_room_class(MYSQL *connection, int room_id) {
@@ -325,14 +306,15 @@ bool is_game_in_room_in_progress(MYSQL *connection, int room_id) {
 
 
 // *********************************
-bool check_current_fd_is_not_logged_in(MYSQL *connection, const int current_fd, char *current_login_username) {
+int get_user_id_by_current_fd(MYSQL *connection, const int current_fd, char *current_login_username) {
   MYSQL_RES *result;
   MYSQL_ROW row;
   char query[QUERY_SIZE] = {0};
+  int user_id = 0;
 
   printf("Check current_fd is not logged in yet... ");
 
-  sprintf(query, "SELECT username FROM users WHERE online_fd=%d;", current_fd);
+  sprintf(query, "SELECT username, id FROM users WHERE online_fd=%d;", current_fd);
   execute_mysql_query(connection, query);
 
   result = mysql_use_result(connection);
@@ -343,16 +325,18 @@ bool check_current_fd_is_not_logged_in(MYSQL *connection, const int current_fd, 
 
     mysql_free_result(result);
 
-    return true;
+    return 0;
   }
 
   sscanf(row[0], "%s", current_login_username);
+  sscanf(row[1], "%d", &user_id);
   printf("current_fd already logged in as %s\n", current_login_username);
 
   mysql_free_result(result);
 
-  return false;
+  return user_id;
 }
+
 bool check_username_exist(MYSQL *connection, const char *username) {
   char query[QUERY_SIZE] = {0};
 
@@ -398,7 +382,6 @@ bool check_user_is_not_logged_in(MYSQL *connection, const char *username) {
   return true;
 }
 
-
 bool check_passwd_is_correct(MYSQL *connection, const char *username, const char *passwd) {
   char query[QUERY_SIZE] = {0};
 
@@ -415,5 +398,53 @@ bool check_passwd_is_correct(MYSQL *connection, const char *username, const char
 
   return true;
 }
+
+bool check_current_fd_is_not_in_room(MYSQL *connection, const int current_fd, unsigned int *room_id) {
+  MYSQL_RES *result;
+  MYSQL_ROW row;
+  char query[QUERY_SIZE] = {0};
+
+  printf("Check current_fd is not in room... ");
+
+  sprintf(query, "SELECT room_id FROM users WHERE online_fd=%d;", current_fd);
+  execute_mysql_query(connection, query);
+
+  result = mysql_use_result(connection);
+  row = mysql_fetch_row(result);
+
+  if (row[0] == NULL) {
+    printf("done\n");
+
+    mysql_free_result(result);
+
+    return true;
+  }
+
+  sscanf(row[0], "%u", room_id);
+  printf("current_fd is in room %u\n", *room_id);
+
+  mysql_free_result(result);
+
+  return false;
+}
+
+
+// 看有沒有重複 room_id
+bool room_id_is_unique(MYSQL *connection, const int room_id) {
+  char query[QUERY_SIZE] = {0};
+
+  printf("Check unique room_id... ");
+
+  sprintf(query, "SELECT * FROM rooms WHERE id=%u", room_id);
+  if (get_mysql_query_result_row_count(connection, query) != 0) {
+    printf("find game room ID\n");
+
+    return false;
+  }
+
+  printf("done\n");
+  return true;
+}
+
 
 // ********************************
