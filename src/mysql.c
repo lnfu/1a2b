@@ -1,8 +1,11 @@
 #define QUERY_SIZE 256
+#define ROW_SIZE 64
 
 #include <mysql/mysql.h>
 #include <stdio.h>
 #include <stdlib.h>  // exit(1)
+#include <string.h>
+#include <unistd.h>
 
 void mysql_connect_remote_database(MYSQL *connection, char *ip_address, unsigned int port, char *username, char *password, char *database) {
   printf("Connect to remote database... ");
@@ -104,4 +107,77 @@ void register_user(MYSQL *connection, const char *username, const char *email, c
   execute_mysql_query(connection, query);
 
   printf("done\n");
+}
+
+
+
+// check user is logged in and not in a room
+// if not, get the user id in users table
+// error message will send by tcp connection
+int get_user_id_if_allowed_to_enter_room(MYSQL *connection, int current_fd) {
+  printf("Check user is logged in and not in a room... ");
+
+
+  MYSQL_RES *result;
+  MYSQL_ROW row;
+  char query[QUERY_SIZE] = {0};
+
+
+  memset(query, 0, QUERY_SIZE);
+  sprintf(query, "SELECT room_id, id FROM users WHERE online_fd=%d", current_fd);
+  execute_mysql_query(connection, query);
+
+  result = mysql_use_result(connection);
+  row = mysql_fetch_row(result);
+  if (row == NULL) {  // Fail(1)
+    printf("\nYou are not logged in\n\n");
+
+    write(current_fd, "You are not logged in\n", strlen("You are not logged in\n"));
+
+    mysql_free_result(result);
+    return 0;
+  }
+
+  if (row[0] != NULL) {  // Fail(2)
+    printf("\nYou are already in game room %s, please leave game room\n\n", row[0]);
+
+    char fail_message[ROW_SIZE] = {0};
+    sprintf(fail_message, "You are already in game room %s, please leave game room\n", row[0]);
+    write(current_fd, fail_message, strlen(fail_message));
+
+    mysql_free_result(result);
+    return 0;
+  }
+
+
+
+
+
+  int user_id;
+  sscanf(row[1], "%d", &user_id);
+  mysql_free_result(result);
+  printf("done\n");
+  return user_id;
+}
+
+
+// 看有沒有重複 room_id
+// error message will send by tcp connection
+int room_id_is_unique(MYSQL *connection, int current_fd, int room_id) {
+  printf("Check unique room_id... ");
+
+
+  char query[QUERY_SIZE] = {0};
+
+  sprintf(query, "SELECT * FROM rooms WHERE id=%u", room_id);
+  if (get_mysql_query_result_row_count(connection, query) != 0) {
+    printf("Game room ID is used, choose another one\n\n");
+
+    write(current_fd, "Game room ID is used, choose another one\n", strlen("Game room ID is used, choose another one\n"));
+
+    return false;
+  }
+
+  printf("done\n");
+  return true;
 }
