@@ -358,7 +358,7 @@ bool check_current_fd_is_not_in_room(MYSQL *connection, const int current_fd, un
 
 
 // 看有沒有重複 room_id
-bool room_id_is_unique(MYSQL *connection, const int room_id) {
+bool room_id_is_unique(MYSQL *connection, const unsigned int room_id) {
   char query[QUERY_SIZE] = {0};
 
   printf("Check unique room_id... ");
@@ -377,7 +377,7 @@ bool room_id_is_unique(MYSQL *connection, const int room_id) {
 
 
 // tell the room class is public or private
-int is_room_public(MYSQL *connection, const int room_id) {
+bool is_room_public(MYSQL *connection, const unsigned int room_id) {
   MYSQL_RES *result;
   MYSQL_ROW row;
   char query[QUERY_SIZE] = {0};
@@ -404,7 +404,7 @@ int is_room_public(MYSQL *connection, const int room_id) {
   return true;
 }
 
-bool is_room_start(MYSQL *connection, const int room_id) {
+bool is_room_start(MYSQL *connection, const unsigned int room_id) {
   MYSQL_RES *result;
   MYSQL_ROW row;
   char query[QUERY_SIZE] = {0};
@@ -430,8 +430,24 @@ bool is_room_start(MYSQL *connection, const int room_id) {
   return true;
 }
 
+bool is_user_host(MYSQL *connection, const int user_id) {
+  char query[QUERY_SIZE] = {0};
 
-void send_message_to_others_in_room(MYSQL *connection, const int room_id, const char *message) {
+  printf("Check user is host... ");
+
+  sprintf(query, "SELECT * FROM rooms WHERE host=%d", user_id);
+
+  if (get_mysql_query_result_row_count(connection, query) == 0) {
+    printf("the user is not the host\n");
+    return false;
+  }
+
+  printf("done\n");
+  return true;
+}
+
+
+void send_message_to_others_in_room(MYSQL *connection, const unsigned int room_id, const char *message) {
   MYSQL_RES *result;
   MYSQL_ROW row;
   char query[QUERY_SIZE] = {0};
@@ -439,11 +455,13 @@ void send_message_to_others_in_room(MYSQL *connection, const int room_id, const 
   printf("Sending message to others in the same room... ");
 
   memset(query, 0, QUERY_SIZE);
-  sprintf(query, "SELECT online_fd FROM users WHERE room_id=%u", room_id);
+  sprintf(query, "SELECT online_fd, username FROM users WHERE room_id=%u", room_id);
   execute_mysql_query(connection, query);
 
   result = mysql_use_result(connection);
   while ((row = mysql_fetch_row(result)) != NULL) {
+    // printf("\nsend message to %s\n", row[1]);
+
     int other_user_in_room;
     sscanf(row[0], "%d", &other_user_in_room);
     write(other_user_in_room, message, strlen(message));

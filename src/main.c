@@ -269,6 +269,8 @@ int main(int argc, char *argv[]) {
 
         if (data_len == 0) {
           // close request
+          // TODO: leave room
+          // TODO: logout
           epoll_ctl(epoll_fd, EPOLL_CTL_DEL, current_fd, NULL);  // delete from epoll
           close(current_fd);                                     // socket close
           printf("closed client: %d\n\n", current_fd);
@@ -627,20 +629,116 @@ int main(int argc, char *argv[]) {
 
 
 
-          // // leave room
-          // if (is_string_match(buffer, "leave room")) {
-          //   if (!is_user_logged_in_and_in_room(connection, current_fd)) {
-          //     continue;
-          //   }
+          // leave room
+          if (is_string_match(buffer, "leave room")) {
+            unsigned int current_room_id = 0;
+            int user_id = 0;
+            char current_login_username[USERNAME_SIZE] = {0};
 
-          //   unsigned int room_id = is_user_host(connection, current_fd);
-          //   if (room_id != 0) {
-          //     printf("You leave game room %u\n", room_id);
-          //     char success_message[ROW_SIZE] = {0};
-          //     sprintf(success_message, "You leave game room %u", room_id);
-          //     write(current_fd, success_message, strlen(success_message));
-          //   }
-          // }
+
+
+
+
+            // Fail(1) You are not logged in
+            user_id = get_user_id_by_current_fd(connection, current_fd, current_login_username);
+            if (user_id == 0) {
+              write(current_fd, "You are not logged in\n", strlen("You are not logged in\n"));
+
+              printf("Fail(1)\n\n");
+              continue;
+            }
+
+
+            // Fail(2) You did not join any game room
+            if (check_current_fd_is_not_in_room(connection, current_fd, &current_room_id)) {
+              write(current_fd, "You did not join any game room\n", strlen("You did not join any game room\n"));
+
+              printf("Fail(2)\n\n");
+              continue;
+            }
+
+
+
+            // Success(1)
+            // Response to you : You leave game room <game room id>
+            // Response to others : Game room manager leave game room <game room id>, you are forced to leave too
+            if (is_user_host(connection, user_id)) {
+              char success_message[ROW_SIZE] = {0};
+              sprintf(success_message, "You leave game room %u\n", current_room_id);
+              write(current_fd, success_message, strlen(success_message));
+
+              // update current user's room to null
+              memset(query, 0, QUERY_SIZE);
+              sprintf(query, "UPDATE users SET room_id=NULL WHERE online_fd=%d;", current_fd);
+              execute_mysql_query(connection, query);
+
+              // broadcast to others
+              char broadcast_message[ROW_SIZE] = {0};
+              sprintf(success_message, "Game room manager leave game room %u, you are forced to leave too\n", current_room_id);
+              send_message_to_others_in_room(connection, current_room_id, broadcast_message);
+
+              // update other user's room to null
+              memset(query, 0, QUERY_SIZE);
+              sprintf(query, "UPDATE users SET room_id=NULL WHERE room_id=%u;", current_room_id);
+              execute_mysql_query(connection, query);
+
+              // TODO: delete room
+
+
+              printf("\n");
+              continue;
+            }
+
+
+
+
+
+            // Success(2)
+            // Response to you : You leave game room <game room id>, game ends
+            // Response to others: <user name> leave game room <game room id>, game ends
+            if (is_room_start(connection, current_room_id)) {
+              char success_message[ROW_SIZE] = {0};
+              sprintf(success_message, "You leave game room %u, game ends\n", current_room_id);
+              write(current_fd, success_message, strlen(success_message));
+
+              // update current user's room to null
+              memset(query, 0, QUERY_SIZE);
+              sprintf(query, "UPDATE users SET room_id=NULL WHERE online_fd=%d;", current_fd);
+              execute_mysql_query(connection, query);
+
+              // broadcast to others
+              char broadcast_message[ROW_SIZE] = {0};
+              sprintf(success_message, "%s leave game room %u, game ends\n", current_login_username, current_room_id);
+              send_message_to_others_in_room(connection, current_room_id, broadcast_message);
+
+              // TODO: make room round = 0
+
+              printf("\n");
+              continue;
+            }
+
+
+
+
+
+            // Success(3)
+            // Response to you : You leave game room <game room id>
+            // Response to others : <user name> leave game room <game room id>
+            char success_message[ROW_SIZE] = {0};
+            sprintf(success_message, "You leave game room %u\n", current_room_id);
+            write(current_fd, success_message, strlen(success_message));
+
+            // update current user's room to null
+            memset(query, 0, QUERY_SIZE);
+            sprintf(query, "UPDATE users SET room_id=NULL WHERE online_fd=%d;", current_fd);
+            execute_mysql_query(connection, query);
+
+            // broadcast to others
+            char broadcast_message[ROW_SIZE] = {0};
+            sprintf(success_message, "%s leave game room %u\n", current_login_username, current_room_id);
+            send_message_to_others_in_room(connection, current_room_id, broadcast_message);
+            printf("\n");
+          }
 
 
 
@@ -668,9 +766,14 @@ int main(int argc, char *argv[]) {
           // if (strncmp(buffer, "guess", strlen("guess")) == 0) {
           //   ;
           // }
-          // if (strncmp(buffer, "exit", strlen("exit")) == 0) {
-          //   ;
-          // }
+          if (strncmp(buffer, "exit", strlen("exit")) == 0) {
+            // close request
+            // TODO: leave room
+            // TODO: logout
+            epoll_ctl(epoll_fd, EPOLL_CTL_DEL, current_fd, NULL);  // delete from epoll
+            close(current_fd);                                     // socket close
+            printf("closed client: %d\n\n", current_fd);
+          }
         }
       }
     }

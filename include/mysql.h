@@ -15,21 +15,27 @@ unsigned int get_room_id_user_is_host(MYSQL *connection, const int current_fd);
 
 
 // **************************************
-int get_user_id_by_current_fd(MYSQL *connection, const int current_fd, char *current_login_username);
 bool check_current_fd_is_not_in_room(MYSQL *connection, const int current_fd, unsigned int *room_id);
+bool check_passwd_is_correct(MYSQL *connection, const char *username, const char *passwd);
+bool room_id_is_unique(MYSQL *connection, const unsigned int room_id);
+void send_message_to_others_in_room(MYSQL *connection, const unsigned int room_id, const char *message);
+int get_user_id_by_current_fd(MYSQL *connection, const int current_fd, char *current_login_username);
+
+// -----------------------------------------------------------
 
 bool check_username_exist(MYSQL *connection, const char *username);
-
 bool check_user_is_not_logged_in(MYSQL *connection, const char *username);
 
-bool check_passwd_is_correct(MYSQL *connection, const char *username, const char *passwd);
+// -----------------------------------------------------------
+bool is_room_start(MYSQL *connection, const unsigned int room_id);
+bool is_room_public(MYSQL *connection, const unsigned int room_id);
 
-bool room_id_is_unique(MYSQL *connection, const int room_id);
+// -----------------------------------------------------------
 
-int is_room_public(MYSQL *connection, const int room_id);
+bool is_user_host(MYSQL *connection, const int user_id);
 
-bool is_room_start(MYSQL *connection, const int room_id);
+// -----------------------------------------------------------
 
 
-void send_message_to_others_in_room(MYSQL *connection, const int room_id, const char *message);
+
 // *******************
