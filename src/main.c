@@ -280,101 +280,72 @@ int main(int argc, char *argv[]) {
         } else {
           // login <username> <password> (login_sample)
           if (is_string_match(buffer, "login")) {
-            // parser username and passwd
-            char username[USERNAME_SIZE] = {0};
-            char passwd[PASSWORD_SIZE] = {0};
-            sscanf(buffer, "login %s %s", username, passwd);
-
             MYSQL_RES *result;
             MYSQL_ROW row;
             char query[QUERY_SIZE] = {0};
-            // TODO: check username exist --> encapsulation
-            // 從 database 找出 match 的 username
-            // 如果找不到 Fail(1) Username does not exist
-            // 如果找到但是有 online fd Fail(3) Someone already logged in as
-            // <username> 如果找到且沒有 online fd 但是 password 不 match
-            // Fail(4) Wrong password
-            printf("Checking username exist, not logged in yet, and correct password... ");
+            char input_username[USERNAME_SIZE] = {0};
+            char input_passwd[PASSWORD_SIZE] = {0};
+            char current_login_username[USERNAME_SIZE] = {0};
 
-            memset(query, 0, QUERY_SIZE);
-            sprintf(query, "SELECT username, online_fd, passwd FROM users WHERE username='%s';", username);
 
-            execute_mysql_query(connection, query);
 
-            result = mysql_use_result(connection);
-            row = mysql_fetch_row(result);
-            if (row == NULL) {  // Fail(1) Username does not exist
-              printf("\nUsername does not exist\n\n");
 
+
+            // parser username and passwd
+            sscanf(buffer, "login %s %s", input_username, input_passwd);
+
+
+            // Fail(1) Username does not exist
+            if (!check_username_exist(connection, input_username)) {
               write(current_fd, "Username does not exist\n", strlen("Username does not exist\n"));
 
-              mysql_free_result(result);
+              printf("Fail(1)\n\n");
               continue;
             }
 
 
-            if (row[1] != NULL) {  // Fail(3) Someone already logged in as (if not null)
-              printf("\nSomeone already logged in as %s\n\n", username);
-
+            // Fail(2) You already logged in as <username>
+            if (!check_current_fd_is_not_logged_in(connection, current_fd, current_login_username)) {
               char fail_message[ROW_SIZE] = {0};
-              sprintf(fail_message, "Someone already logged in as %s\n", username);
+              sprintf(fail_message, "You already logged in as %s\n", current_login_username);
               write(current_fd, fail_message, strlen(fail_message));
 
-              mysql_free_result(result);
+              printf("Fail(2)\n\n");
+              continue;
+            };
+
+
+            // Fail(3) Someone already logged in as<username>
+            if (!check_user_is_not_logged_in(connection, input_username)) {
+              char fail_message[ROW_SIZE] = {0};
+              sprintf(fail_message, "Someone already logged in as %s\n", input_username);
+              write(current_fd, fail_message, strlen(fail_message));
+
+              printf("Fail(3)\n\n");
               continue;
             }
 
 
-            if (strcmp(row[2], passwd) != 0) {  // Fail(4)
-              printf("\nWrong password\n\n");
-
+            // Fail(4) Wrong password
+            if (!check_passwd_is_correct(connection, input_username, input_passwd)) {
               write(current_fd, "Wrong password\n", strlen("Wrong password\n"));
 
-              mysql_free_result(result);
+              printf("Fail(4)\n\n");
               continue;
             }
-            mysql_free_result(result);
-            printf("done\n");
 
 
-
-
-            // 從 database 找出 match 的 onlinefd
-            // 如果找到 Fail(2) You already logged in as <username>
-            memset(query, 0, QUERY_SIZE);
-            sprintf(query, "SELECT username FROM users WHERE online_fd=%d", current_fd);
-            execute_mysql_query(connection, query);
-
-            result = mysql_use_result(connection);
-            row = mysql_fetch_row(result);
-            if (row != NULL) {  // Fail(2) You already logged in as <username>
-              printf("You already logged in as %s\n\n", username);
-
-              char fail_message[ROW_SIZE] = {0};
-              sprintf(fail_message, "You already logged in as %s\n", row[0]);
-              write(current_fd, fail_message, strlen(fail_message));
-
-              mysql_free_result(result);
-              continue;
-            }
-            mysql_free_result(result);
-
-
-
-
-
-            // login successfully
+            // Success Welcome, <username>
             // update database users table
-
-            printf("Login as %s... ", username);
+            printf("Login as %s... ", input_username);
             memset(query, 0, QUERY_SIZE);
-            sprintf(query, "UPDATE users SET online_fd=%d WHERE username='%s';", current_fd, username);
+            sprintf(query, "UPDATE users SET online_fd=%d WHERE username='%s';", current_fd, input_username);
             execute_mysql_query(connection, query);
             printf("done\n");
 
             // return successful message
             char success_message[ROW_SIZE] = {0};
-            sprintf(success_message, "Welcome, %s\n", username);
+            sprintf(success_message, "Welcome, %s\n", input_username);
             write(current_fd, success_message, strlen(success_message));
 
             printf("\n");
@@ -442,7 +413,8 @@ int main(int argc, char *argv[]) {
 
 
 
-            if (room_id_is_unique(connection, current_fd, room_id) == false) {
+            if (room_id_is_unique(connection, room_id) == false) {
+              write(current_fd, "Game room ID is used, choose another one\n", strlen("Game room ID is used, choose another one\n"));
               continue;
             }
 
@@ -494,7 +466,8 @@ int main(int argc, char *argv[]) {
 
 
 
-            if (room_id_is_unique(connection, current_fd, room_id) == false) {
+            if (room_id_is_unique(connection, room_id) == false) {
+              write(current_fd, "Game room ID is used, choose another one\n", strlen("Game room ID is used, choose another one\n"));
               continue;
             }
 
@@ -525,92 +498,129 @@ int main(int argc, char *argv[]) {
 
 
 
-
-          // if (is_string_match(buffer, "join room")) {
-          //   // parser room id
-          //   unsigned int room_id;
-          //   sscanf(buffer, "join room %u", &room_id);
-
-
+          // join room
+          if (is_string_match(buffer, "join room")) {
+            // parser room id
+            unsigned int room_id;
+            sscanf(buffer, "join room %u", &room_id);
 
 
-          //   MYSQL_RES *result;
-          //   MYSQL_ROW row;
-          //   char query[QUERY_SIZE] = {0};
-          //   char username[USERNAME_SIZE] = {0};  // current username
-          //   // 從 database 的 users table 找出和當前 fd match 的 roomid
-          //   // not login Fail(1)
-          //   // in room Fail(2)
-          //   // TODO: use encapsulation
-          //   memset(query, 0, QUERY_SIZE);
-          //   sprintf(query, "SELECT room_id, username FROM users WHERE online_fd=%d", current_fd);
-          //   execute_mysql_query(connection, query);
-          //   result = mysql_use_result(connection);
-          //   row = mysql_fetch_row(result);
-          //   if (row == NULL) {  // Fail(1)
-          //     printf("\n");
-          //     write(current_fd, "You are not logged in", strlen("You are not logged in"));
+
+
+
+            int user_id = get_user_id_if_allowed_to_enter_room(connection, current_fd);
+            if (user_id == 0) {
+              continue;
+            }
+
+
+
+
+
+            MYSQL_RES *result;
+            MYSQL_ROW row;
+            char query[QUERY_SIZE] = {0};
+            char username[USERNAME_SIZE] = {0};  // current username
+
+
+
+
+
+            if (room_id_is_unique(connection, room_id)) {
+              printf("\n");
+              char fail_message[ROW_SIZE] = {0};
+              sprintf(fail_message, "Game room %u is not exist\n", room_id);
+              write(current_fd, fail_message, strlen(fail_message));
+
+              continue;
+            }
+
+
+            if (get_room_class(connection, room_id) == 0) {
+              write(current_fd, "Game room is private, please join game by invitation code\n",
+                    strlen("Game room is private, please join game by invitation code\n"));
+              continue;
+            }
+
+            if (is_game_in_room_in_progress(connection, room_id)) {
+              write(current_fd, "Game has started, you can't join now\n", strlen("Game has started, you can't join now\n"));
+              continue;
+            }
+
+
+
+
+
+            // success
+            // You join game room <game room id>
+            char success_message[ROW_SIZE] = {0};
+            sprintf(success_message, "You join game room %u\n", room_id);
+            write(current_fd, success_message, strlen(success_message));
+
+
+            // send to others in the room
+
+            // get current username
+            memset(query, 0, QUERY_SIZE);
+            sprintf(query, "SELECT username FROM users WHERE online_fd=%d", current_fd);
+            execute_mysql_query(connection, query);
+
+            result = mysql_use_result(connection);
+            row = mysql_fetch_row(result);
+            sprintf(username, "%s", row[0]);
+            mysql_free_result(result);
+
+
+            memset(query, 0, QUERY_SIZE);
+            sprintf(query, "SELECT online_fd FROM users WHERE room_id=%u", room_id);
+            execute_mysql_query(connection, query);
+
+            result = mysql_use_result(connection);
+            while ((row = mysql_fetch_row(result)) != NULL) {
+              int other_user_in_room;
+              sscanf(row[0], "%d", &other_user_in_room);
+              char temp[ROW_SIZE] = {0};
+              sprintf(temp, "Welcome, %s to game!\n", username);
+              write(other_user_in_room, temp, strlen(temp));
+            }
+            mysql_free_result(result);
+
+
+
+
+
+            // 更改 users table 中現在 user 的 room_id
+            memset(query, 0, QUERY_SIZE);
+            sprintf(query, "UPDATE users SET room_id=%d WHERE online_fd=%d;", room_id, current_fd);
+            execute_mysql_query(connection, query);
+
+
+            printf("\n\n");
+          }
+
+
+
+
+          // // leave room
+          // if (is_string_match(buffer, "leave room")) {
+          //   if (!is_user_logged_in_and_in_room(connection, current_fd)) {
           //     continue;
           //   }
-          //   if (row[0] != ?????) { // Fail(2)
-          //     char fail_message[ROW_SIZE] = {0};
-          //     sprintf(fail_message,
-          //             "You are already in game room %s, please leave game
-          //             room", row[0]);
-          //     write(current_fd, fail_message, ROW_SIZE);
-          //     continue;
+
+          //   unsigned int room_id = is_user_host(connection, current_fd);
+          //   if (room_id != 0) {
+          //     printf("You leave game room %u\n", room_id);
+          //     char success_message[ROW_SIZE] = {0};
+          //     sprintf(success_message, "You leave game room %u", room_id);
+          //     write(current_fd, success_message, strlen(success_message));
           //   }
-          //   sprintf(username, "%s", row[1]);
-          //   mysql_free_result(result);
-          //   // 從 database 的 rooms table 找和 room_id match 的 id & class &
-          //   // round
-          //   memset(query, 0, QUERY_SIZE);
-          //   sprintf(query, "SELECT id, class, round FROM rooms WHERE id=%u", room_id);
-          //   execute_mysql_query(query);
-          //   MYSQL_RES *result = mysql_use_result(connection);
-          //   MYSQL_ROW row = mysql_fetch_row(result);
-          //   if (row == NULL) {
-          //     char fail_message[ROW_SIZE] = {0};
-          //     sprintf(fail_message, "Game room %u is not exist", room_id);
-          //     write(current_fd, fail_message, ROW_SIZE);
-          //     continue;
-          //   }
-          //   if (strcmp(row[1], "0") == 0) {  // 如果 class = 0 代表是 private room
-          //     write(current_fd,
-          //           "Game room is private, please join game by invitation
-          //           code", strlen("Game room is private, please join game by
-          //           "
-          //                  "invitation code"));
-          //     continue;
-          //   }
-          //   if (strcat(row[2], "0") != 0) {  // 如果 round 不是 0, 代表遊戲進行中
-          //     write(current_fd, "Game has started, you can't join now", strlen("Game has started, you can't join now"));
-          //     continue;
-          //   }
-          //   mysql_free_result(result);
-          //   // success
-          //   // You join game room <game room id>
-          //   char success_message[ROW_SIZE] = {0};
-          //   sprintf(success_message, "You join game room %u", room_id);
-          //   write(current_fd, success_message, ROW_SIZE);
-          //   // send to others in the room
-          //   memset(query, 0, QUERY_SIZE);
-          //   sprintf(query, "SELECT onlinefd FROM users WHERE roomid=%u", room_id);
-          //   execute_mysql_query(connection, query);
-          //   result = mysql_use_result(result);
-          //   while ((row = mysql_fetch_row(result)) != NULL) {
-          //     int other_user_in_room;
-          //     sscanf(row[0], "%d", other_user_in_room);
-          //     char temp[ROW_SIZE] = {0};
-          //     sscanf(temp, "Welcome, %s to game!", username);
-          //     write(other_user_in_room, temp, ROW_SIZE);
-          //   }
-          //   // TODO: 更改 users table 中現在 user 的 room_id
           // }
 
 
 
 
+
+          //
 
           // if (strncmp(buffer, "invite", strlen("invite")) == 0) {
           //   ;
