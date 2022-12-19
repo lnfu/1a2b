@@ -64,28 +64,6 @@ int get_mysql_query_result_row_count(MYSQL *connection, const char *query) {
   return query_result_row_count;
 }
 
-unsigned int get_room_id_for_online_fd(MYSQL *connection, const int online_fd) {
-  char query[QUERY_SIZE] = {0};
-  sprintf(query, "SELECT roomid FROM users WHERE onlinefd=%d", online_fd);
-  execute_mysql_query(connection, query);
-
-  MYSQL_RES *result = mysql_use_result(connection);
-  MYSQL_ROW row = mysql_fetch_row(result);
-
-  if (row == NULL) {
-    // not in room!
-    printf("THIS USER IS NOT IN A ROOM\n");
-    return 0;
-  }
-
-  unsigned int room_id = 0;
-  sscanf(row[0], "%u", room_id);
-
-  mysql_free_result(result);
-
-  return room_id;
-}
-
 bool username_and_email_are_unique(MYSQL *connection, const char *username, const char *email) {
   char query[QUERY_SIZE] = {0};
   sprintf(query, "SELECT * FROM users WHERE username = '%s' OR email='%s';", username, email);
@@ -107,44 +85,6 @@ void register_user(MYSQL *connection, const char *username, const char *email, c
   execute_mysql_query(connection, query);
 
   printf("done\n");
-}
-
-bool is_user_logged_in_and_in_room(MYSQL *connection, const int current_fd) {
-  printf("Check user is logged in and in a room already... ");
-
-  MYSQL_RES *result;
-  MYSQL_ROW row;
-  char query[QUERY_SIZE] = {0};
-
-  memset(query, 0, QUERY_SIZE);
-  sprintf(query, "SELECT room_id  FROM users WHERE online_fd=%d", current_fd);
-  execute_mysql_query(connection, query);
-
-  result = mysql_use_result(connection);
-  row = mysql_fetch_row(result);
-  if (row == NULL) {
-    printf("\nYou are not logged in\n\n");
-
-    write(current_fd, "You are not logged in\n", strlen("You are not logged in\n"));
-
-    mysql_free_result(result);
-    return false;
-  }
-
-  if (row[0] == NULL) {  // Fail(2)
-    printf("\nYou did not join any game room\n\n");
-
-    char fail_message[ROW_SIZE] = {0};
-    sprintf(fail_message, "You did not join any game room\n");
-    write(current_fd, fail_message, strlen(fail_message));
-
-    mysql_free_result(result);
-    return false;
-  }
-
-  mysql_free_result(result);
-  printf("done\n");
-  return true;
 }
 
 
@@ -183,50 +123,6 @@ unsigned int get_room_id_user_is_host(MYSQL *connection, const int current_fd) {
 
   printf("done\n");
   return room_id;
-}
-
-
-// check user is logged in and not in a room
-// if not, get the user id in users table
-// error message will send by tcp connection
-int get_user_id_if_allowed_to_enter_room(MYSQL *connection, int current_fd) {
-  printf("Check user is logged in and not in a room... ");
-
-  MYSQL_RES *result;
-  MYSQL_ROW row;
-  char query[QUERY_SIZE] = {0};
-
-  memset(query, 0, QUERY_SIZE);
-  sprintf(query, "SELECT room_id, id FROM users WHERE online_fd=%d", current_fd);
-  execute_mysql_query(connection, query);
-
-  result = mysql_use_result(connection);
-  row = mysql_fetch_row(result);
-  if (row == NULL) {  // Fail(1)
-    printf("\nYou are not logged in\n\n");
-
-    write(current_fd, "You are not logged in\n", strlen("You are not logged in\n"));
-
-    mysql_free_result(result);
-    return 0;
-  }
-
-  if (row[0] != NULL) {  // Fail(2)
-    printf("\nYou are already in game room %s, please leave game room\n\n", row[0]);
-
-    char fail_message[ROW_SIZE] = {0};
-    sprintf(fail_message, "You are already in game room %s, please leave game room\n", row[0]);
-    write(current_fd, fail_message, strlen(fail_message));
-
-    mysql_free_result(result);
-    return 0;
-  }
-
-  int user_id;
-  sscanf(row[1], "%d", &user_id);
-  mysql_free_result(result);
-  printf("done\n");
-  return user_id;
 }
 
 
