@@ -2,6 +2,12 @@ TRUNCATE TABLE users;
 SELECT * FROM users;
 -- SELECT * FROM users ORDER BY username;
 
-DROP TABLE users;
 DROP TABLE rooms;
+DROP TABLE users;
 SHOW TABLES;
+
+UPDATE users SET online_fd=2 WHERE username = 'Alice';
+SELECT * FROM users;
+
+
+SELECT * FROM rooms;
