@@ -159,76 +159,108 @@ int main(int argc, char *argv[]) {
 
 
 
-        // // list users (list_rooms_and_users_sample)
-        // if (strncmp(buffer, "list users", strlen("list users")) == 0) {
-        //   memset(buffer, 0, BUFFER_SIZE);
-        //   strcat(buffer, "List Users\n");
-        //   // no users
-        //   if (get_mysql_query_result_row_count(connection, "SELECT * FROM
-        //   users;") == 0) {
-        //     strcat(buffer, "No Users\n");
-        //     sendto(udp_socket, buffer, BUFFER_SIZE, 0, (struct sockaddr
-        //     *)&client_address, client_address_size); printf("\n"); continue;
-        //   }
-        //   // query
-        //   execute_mysql_query(connection, "SELECT username, email, onlinefd
-        //   FROM users ORDER BY username;");
-        //   MYSQL_RES *result = mysql_use_result(connection);
-        //   MYSQL_ROW row;
-        //   // fetch result
-        //   int count = 0;
-        //   while ((row = mysql_fetch_row(result)) != NULL) {
-        //     count++;
-        //     char temp[ROW_SIZE];
-        //     // ! 確認一下 onlinefd 沒有值的時候 row[2] 會是甚麼?
-        //     sprintf(temp, "%d. %s<%s> %s\n", count, row[0], row[1], row[2] !=
-        //     0 ? "Online" : "Offline"); strcat(buffer, temp);
-        //   }
-        //   mysql_free_result(result);
-        //   // return message
-        //   sendto(udp_socket, buffer, BUFFER_SIZE, 0, (struct sockaddr
-        //   *)&client_address, client_address_size); printf("\n");
-        // }
-        // // list rooms (list_rooms_and_users_sample)
-        // if (strncmp(buffer, "list rooms", strlen("list rooms")) == 0) {
-        //   memset(buffer, 0, BUFFER_SIZE);
-        //   strcat(buffer, "List Game Rooms\n");
-        //   // no users
-        //   if (get_mysql_query_result_row_count(connection, "SELECT * FROM
-        //   users;") == 0) {
-        //     strcat(buffer, "No Rooms\n");
-        //     sendto(udp_socket, buffer, BUFFER_SIZE, 0, (struct sockaddr
-        //     *)&client_address, client_address_size); printf("\n"); continue;
-        //   }
-        //   // query
-        //   execute_mysql_query(connection, "SELECT class, id, round FROM rooms
-        //   ORDER BY id;");
-        //   MYSQL_RES *result = mysql_use_result(connection);
-        //   MYSQL_ROW row;
-        //   // fetch result
-        //   int count = 0;
-        //   while ((row = mysql_fetch_row(result)) != NULL) {
-        //     count++;
-        //     char temp[ROW_SIZE];
-        //     // ! careful about the strcmp
-        //     sprintf(temp, "%d. (%s) Game Room %s %s\n", count,
-        //     (strcmp(row[0], "1") == 0) ? "Public" : "Private", row[1],
-        //     (strcmp(row[2], "0") == 0) ? "is open for players" : "has started
-        //     playing"); strcat(buffer, temp);
-        //   }
-        //   mysql_free_result(result);
-        //   // return message
-        //   sendto(udp_socket, buffer, BUFFER_SIZE, 0, (struct sockaddr
-        //   *)&client_address, client_address_size); printf("\n");
-        // }
+        // list users (list_rooms_and_users_sample)
+        if (is_string_match(buffer, "list users")) {
+          memset(buffer, 0, BUFFER_SIZE);
+          strcat(buffer, "List Users\n");
+
+
+
+
+
+          // no users
+          if (get_mysql_query_result_row_count(connection, "SELECT * FROM users;") == 0) {
+            strcat(buffer, "No Users\n");
+            sendto(udp_socket, buffer, strlen(buffer), 0, (struct sockaddr *)&client_address, client_address_size);
+
+            printf("\n");
+            continue;
+          }
+
+
+
+
+          MYSQL_RES *result;
+          MYSQL_ROW row;
+          // query
+          execute_mysql_query(connection, "SELECT username, email, online_fd FROM users ORDER BY username;");
+          result = mysql_use_result(connection);
+          // fetch result
+          int count = 0;
+          while ((row = mysql_fetch_row(result)) != NULL) {
+            count++;
+            char temp[ROW_SIZE];
+            sprintf(temp, "%d. %s<%s> %s\n", count, row[0], row[1], row[2] != NULL ? "Online" : "Offline");
+            strcat(buffer, temp);
+          }
+          mysql_free_result(result);
+
+
+
+
+
+          // return message
+          sendto(udp_socket, buffer, strlen(buffer), 0, (struct sockaddr *)&client_address, client_address_size);
+          printf("\n");
+        }
+
+
+
+
+
+        // list rooms (list_rooms_and_users_sample)
+        if (is_string_match(buffer, "list rooms")) {
+          memset(buffer, 0, BUFFER_SIZE);
+          strcat(buffer, "List Game Rooms\n");
+
+
+
+
+
+          // no users
+          if (get_mysql_query_result_row_count(connection, "SELECT * FROM users;") == 0) {
+            strcat(buffer, "No Rooms\n");
+            sendto(udp_socket, buffer, strlen(buffer), 0, (struct sockaddr *)&client_address, client_address_size);
+
+            printf("\n");
+            continue;
+          }
+
+
+
+
+          MYSQL_RES *result;
+          MYSQL_ROW row;
+          // query
+          execute_mysql_query(connection, "SELECT class, id, round FROM rooms ORDER BY id;");
+          result = mysql_use_result(connection);
+          // fetch result
+          int count = 0;
+          while ((row = mysql_fetch_row(result)) != NULL) {
+            count++;
+            char temp[ROW_SIZE];
+            sprintf(temp, "%d. (%s) Game Room %s %s\n", count, (strcmp(row[0], "1") == 0) ? "Public" : "Private", row[1],
+                    (strcmp(row[2], "0") == 0) ? "is open for players" : "has started playing");
+            strcat(buffer, temp);
+          }
+          mysql_free_result(result);
+
+
+
+
+
+          // return message
+          sendto(udp_socket, buffer, strlen(buffer), 0, (struct sockaddr *)&client_address, client_address_size);
+          printf("\n");
+        }
+
+
+
+
+
       } else if (current_fd == tcp_socket_for_listen) {
         // accept new user
         accept_tcp_connection(tcp_socket_for_listen, epoll_fd);
-
-
-
-
-
       } else {
         char buffer[BUFFER_SIZE] = {0};
         int data_len = read(current_fd, buffer, BUFFER_SIZE);  // read data from tcp socket
