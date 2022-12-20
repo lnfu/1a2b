@@ -5,7 +5,7 @@
 #define USERNAME_SIZE 256
 #define EMAIL_SIZE 256
 #define PASSWORD_SIZE 256
-#define QUERY_SIZE 256
+#define QUERY_SIZE 512
 #define ROW_SIZE 64
 #include <arpa/inet.h>
 #include <mysql/mysql.h>
@@ -77,6 +77,11 @@ int main(int argc, char *argv[]) {
   memset(query, 0, QUERY_SIZE);
   sprintf(query, "TRUNCATE TABLE rooms;");
   execute_mysql_query(connection, query);
+
+  memset(query, 0, QUERY_SIZE);
+  sprintf(query, "TRUNCATE TABLE invitations;");
+  execute_mysql_query(connection, query);
+
   printf("done\n");
 #endif
 
@@ -437,7 +442,7 @@ int main(int argc, char *argv[]) {
 
 
             // Fail(3) Someone already logged in as<username>
-            if (!check_user_is_not_logged_in(connection, input_username)) {
+            if (!check_user_is_not_logged_in_by_username(connection, input_username)) {
               char fail_message[ROW_SIZE] = {0};
               sprintf(fail_message, "Someone already logged in as %s\n", input_username);
               write(current_fd, fail_message, strlen(fail_message));
@@ -786,7 +791,6 @@ int main(int argc, char *argv[]) {
             }
 
 
-
             // Success(1)
             // Response to you : You leave game room <game room id>
             // Response to others : Game room manager leave game room <game room id>, you are forced to leave too
@@ -810,9 +814,17 @@ int main(int argc, char *argv[]) {
               sprintf(query, "UPDATE users SET room_id=NULL, serial_number_in_room=NULL WHERE room_id=%u;", current_room_id);
               execute_mysql_query(connection, query);
 
-              // TODO: change the serial number of user after him
 
-              // TODO: delete room
+              // delete room
+              memset(query, 0, QUERY_SIZE);
+              sprintf(query, "DELETE FROM rooms WHERE id=%u;", current_room_id);
+              execute_mysql_query(connection, query);
+
+              // delete invitation
+              memset(query, 0, QUERY_SIZE);
+              sprintf(query, "DELETE FROM invitations WHERE room_id=%u;", current_room_id);
+              execute_mysql_query(connection, query);
+
 
 
               printf("\n");
@@ -842,9 +854,20 @@ int main(int argc, char *argv[]) {
               send_message_to_others_in_room(connection, current_room_id, broadcast_message);
 
 
-              // TODO: change the serial number of user after him
+              // change the serial number of user after him
+              memset(query, 0, QUERY_SIZE);
+              int current_serial_number = get_current_serial_number_in_room(connection, current_room_id);
+              sprintf(query,
+                      "UPDATE users SET serial_number_in_room=serial_number_in_room-1 WHERE room_id=%d AND serial_number_in_room>%d;",
+                      current_room_id, current_serial_number);
+              execute_mysql_query(connection, query);
 
-              // TODO: make room round = 0
+
+              // make room round = 0, current_serial_number=0, answer=NULL
+              memset(query, 0, QUERY_SIZE);
+              sprintf(query, "UPDATE rooms SET round=0, current_serial_number=0, answer=NULL WHERE id=%d;", current_room_id);
+              execute_mysql_query(connection, query);
+
 
               printf("\n");
               continue;
@@ -871,7 +894,13 @@ int main(int argc, char *argv[]) {
             sprintf(broadcast_message, "%s leave game room %u\n", current_login_username, current_room_id);
             send_message_to_others_in_room(connection, current_room_id, broadcast_message);
 
-            // TODO: change the serial number of user after him
+
+            // change the serial number of user after him
+            memset(query, 0, QUERY_SIZE);
+            int current_serial_number = get_current_serial_number_in_room(connection, current_room_id);
+            sprintf(query, "UPDATE users SET serial_number_in_room=serial_number_in_room-1 WHERE room_id=%d AND serial_number_in_room>%d;",
+                    current_room_id, current_serial_number);
+            execute_mysql_query(connection, query);
 
             printf("\n");
           }
@@ -880,22 +909,257 @@ int main(int argc, char *argv[]) {
 
 
 
-          //
+          if (is_string_match(buffer, "invite")) {
+            char input_email[EMAIL_SIZE] = {0};
+            char current_login_username[USERNAME_SIZE] = {0};
+            int user_id = 0;
+            unsigned int current_room_id = 0;
+            int invitee_online_fd = 0;
+            char inviter_email[EMAIL_SIZE] = {0};
+            char inviter_username[USERNAME_SIZE] = {0};
+            char invitee_username[USERNAME_SIZE] = {0};
 
-          // if (strncmp(buffer, "invite", strlen("invite")) == 0) {
-          //   ;
-          // }
-          // if (strncmp(buffer, "list invitations", strlen("list invitations"))
-          // ==
-          //     0) {
-          //   ;
-          // }
-          // if (strncmp(buffer, "accept", strlen("accept")) == 0) {
-          //   ;
-          // }
-          // if (strncmp(buffer, "leave room", strlen("leave room")) == 0) {
-          //   ;
-          // }
+            // parser email
+            sscanf(buffer, "invite %s", input_email);
+
+
+            // Fail(1) You are not logged in
+            user_id = get_user_id_by_current_fd(connection, current_fd, current_login_username);
+            if (user_id == 0) {
+              write(current_fd, "You are not logged in\n", strlen("You are not logged in\n"));
+
+              printf("Fail(1)\n\n");
+              continue;
+            }
+
+
+            // Fail(2) You did not join any game room
+            if (check_current_fd_is_not_in_room(connection, current_fd, &current_room_id)) {
+              write(current_fd, "You did not join any game room\n", strlen("You did not join any game room\n"));
+
+              printf("Fail(2)\n\n");
+              continue;
+            }
+
+            // Fail(3) You are not private game room manager
+            if (is_room_public(connection, current_room_id) || !is_user_host(connection, user_id)) {
+              write(current_fd, "You are not private game room manager\n", strlen("You are not private game room manager\n"));
+
+              printf("Fail(3)\n\n");
+              continue;
+            }
+
+
+            // Fail(4) Invitee not logged in
+            invitee_online_fd = get_online_fd_by_email(connection, input_email);
+            if (invitee_online_fd == 0) {
+              write(current_fd, "Invitee not logged in\n", strlen("Invitee not logged in\n"));
+
+              printf("Fail(4)\n\n");
+              continue;
+            }
+
+
+            // Success
+            get_email_by_online_fd(connection, current_fd, inviter_email);
+
+            get_username_by_online_fd(connection, current_fd, inviter_username);
+
+
+
+            char invitee_message[ROW_SIZE] = {0};
+            sprintf(invitee_message, "You receive invitation from %s<%s>\n", inviter_username, inviter_email);
+            write(invitee_online_fd, invitee_message, strlen(invitee_message));
+
+
+
+            char inviter_message[ROW_SIZE] = {0};
+            get_username_by_online_fd(connection, invitee_online_fd, invitee_username);
+            sprintf(inviter_message, "You send invitation to %s<%s>\n", invitee_username, input_email);
+            write(current_fd, inviter_message, strlen(inviter_message));
+
+
+            // check repeat invitation
+            memset(query, 0, QUERY_SIZE);
+            sprintf(query, "SELECT * FROM invitations WHERE inviter_username='%s' AND invitee_online_fd=%d;", inviter_username,
+                    invitee_online_fd);
+            if (get_mysql_query_result_row_count(connection, query) > 0) {
+              printf("\n");
+
+              continue;
+            }
+
+            unsigned int invitation_code = get_room_invitation_code(connection, current_room_id);
+            memset(query, 0, QUERY_SIZE);
+            sprintf(query,
+                    "INSERT INTO invitations (inviter_username, inviter_email, room_id, invitation_code, invitee_online_fd) VALUES "
+                    "('%s', '%s', %u, %u, %d);",
+                    inviter_username, inviter_email, current_room_id, invitation_code, invitee_online_fd);
+            execute_mysql_query(connection, query);
+
+            printf("\n");
+          }
+
+
+
+          if (is_string_match(buffer, "list invitations")) {
+            memset(buffer, 0, BUFFER_SIZE);
+            strcat(buffer, "List invitations\n");
+
+
+
+
+
+            // No Invitations
+            if (get_mysql_query_result_row_count(connection, "SELECT * FROM invitations;") == 0) {
+              strcat(buffer, "No Invitations\n");
+              write(current_fd, buffer, strlen(buffer));
+
+              printf("\n");
+              continue;
+            }
+
+
+
+            MYSQL_RES *result;
+            MYSQL_ROW row;
+            // query
+            memset(query, 0, QUERY_SIZE);
+            sprintf(query,
+                    "SELECT inviter_username, inviter_email, room_id, invitation_code FROM invitations WHERE invitee_online_fd=%d ORDER BY "
+                    "room_id;",
+                    current_fd);
+            execute_mysql_query(connection, query);
+            result = mysql_use_result(connection);
+            // fetch result
+            int count = 0;
+            while ((row = mysql_fetch_row(result)) != NULL) {
+              count++;
+              char temp[ROW_SIZE];
+              sprintf(temp, "%d. %s<%s> invite you to join game room %s, invitation code is %s\n", count, row[0], row[1], row[2], row[3]);
+              strcat(buffer, temp);
+            }
+            mysql_free_result(result);
+
+
+
+
+
+            // return message
+            write(current_fd, buffer, strlen(buffer));
+
+            printf("\n");
+          }
+
+
+
+          // accept <inviter email> <invitation code>
+          if (is_string_match(buffer, "accept")) {
+            int user_id = 0;
+            char current_login_username[USERNAME_SIZE] = {0};
+            unsigned int current_room_id = 0;
+            char inviter_email[EMAIL_SIZE] = {0};
+            unsigned int invitation_code = 0;
+            unsigned int room_id = 0;
+
+            // parser inviter_email and invitation_code
+            sscanf(buffer, "accept %s %u", inviter_email, &invitation_code);
+
+            // Fail(1) You are not logged in
+            user_id = get_user_id_by_current_fd(connection, current_fd, current_login_username);
+            if (user_id == 0) {
+              write(current_fd, "You are not logged in\n", strlen("You are not logged in\n"));
+
+              printf("Fail(1)\n\n");
+              continue;
+            }
+
+
+            // Fail(2) You are already in game room <game room id>, please leave game room
+            if (!check_current_fd_is_not_in_room(connection, current_fd, &current_room_id)) {
+              char fail_message[ROW_SIZE] = {0};
+              sprintf(fail_message, "You are already in game room %u, please leave game room\n", current_room_id);
+              write(current_fd, fail_message, strlen(fail_message));
+
+              printf("Fail(2)\n\n");
+              continue;
+            }
+
+
+
+
+            // Fail(3) Invitation not exist
+            memset(query, 0, QUERY_SIZE);
+            sprintf(query, "SELECT * FROM invitations WHERE inviter_email='%s' AND invitee_online_fd=%d", inviter_email, current_fd);
+            if (get_mysql_query_result_row_count(connection, query) == 0) {
+              write(current_fd, "Invitation not exist\n", strlen("Invitation not exist\n"));
+
+              printf("Fail(3)\n\n");
+              continue;
+            }
+
+
+            // Fail(4) Your invitation code is incorrect
+            // memset(query, 0, QUERY_SIZE);
+            // sprintf(query, "SELECT * FROM invitations WHERE inviter_email='%s' AND invitee_online_fd=%d AND invitation_code=%u",
+            //         inviter_email, current_fd, invitation_code);
+            // if (get_mysql_query_result_row_count(connection, query) == 0) {
+            //   write(current_fd, "Your invitation code is incorrect\n", strlen("Your invitation code is incorrect\n"));
+
+            //   printf("Fail(4)\n\n");
+            //   continue;
+            // }
+            memset(query, 0, QUERY_SIZE);
+            sprintf(query, "SELECT room_id FROM invitations WHERE inviter_email='%s' AND invitee_online_fd=%d AND invitation_code=%u",
+                    inviter_email, current_fd, invitation_code);
+            execute_mysql_query(connection, query);
+            MYSQL_RES *result = mysql_use_result(connection);
+            MYSQL_ROW row = mysql_fetch_row(result);
+            if (row == NULL) {
+              write(current_fd, "Your invitation code is incorrect\n", strlen("Your invitation code is incorrect\n"));
+
+              printf("Fail(4)\n\n");
+              continue;
+            }
+            sscanf(row[0], "%u", &room_id);
+            mysql_free_result(result);
+
+
+
+
+
+            // Fail(5) Game has started, you can't join now
+            if (is_room_start(connection, room_id)) {
+              write(current_fd, "Game has started, you can't join now\n", strlen("Game has started, you can't join now\n"));
+
+              printf("Fail(5)\n\n");
+              continue;
+            }
+
+            // success
+            // You join game room <game room id>
+            char success_message[ROW_SIZE] = {0};
+            sprintf(success_message, "You join game room %u\n", room_id);
+            write(current_fd, success_message, strlen(success_message));
+
+
+            // send to others in the room
+            char broadcast_message[ROW_SIZE] = {0};
+            sprintf(broadcast_message, "Welcome, %s to game!\n", current_login_username);
+            send_message_to_others_in_room(connection, room_id, broadcast_message);
+
+            // 更改 users table 中現在 user 的 room_id
+            int serial_number = get_room_user_count(connection, room_id);
+            memset(query, 0, QUERY_SIZE);
+            sprintf(query, "UPDATE users SET room_id=%d, serial_number_in_room=%d WHERE online_fd=%d;", room_id, serial_number, current_fd);
+            execute_mysql_query(connection, query);
+
+            printf("\n");
+          }
+
+
+
+
 
           // start game <number of rounds> <guess number>
           if (strncmp(buffer, "start game", strlen("start game")) == 0) {

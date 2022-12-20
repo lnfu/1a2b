@@ -1,0 +1,11 @@
+*** testcases_correct/leave_room_sample
+--- build/testcases_your/leave_room_sample
+***************
+*** 18,23 ****
+  (Broadcast to 1) Game start! Current player is Alice
+  (1) You leave game room 111, game ends
+  (Broadcast to 0) Bob leave game room 111, game ends
+- (1) You did not join any game room
+- (1) Goodbye, Bob
+- (1) You are not logged in
+--- 18,20 ----

@@ -1,0 +1,14 @@
+*** testcases_correct/list_invitations_sample
+--- build/testcases_your/list_invitations_sample
+***************
+*** 46,49 ****
+  1. David<david@gmail.com> invite you to join game room 101, invitation code is 333
+  2. Alice<alice@gmail.com> invite you to join game room 203, invitation code is 9
+  3. Bob<bob@gmail.com> invite you to join game room 408, invitation code is 22
+! 4. Tea<tea@gmail.com> invite you to join game room 703, invitation code is 44444
+--- 46,50 ----
+  1. David<david@gmail.com> invite you to join game room 101, invitation code is 333
+  2. Alice<alice@gmail.com> invite you to join game room 203, invitation code is 9
+  3. Bob<bob@gmail.com> invite you to join game room 408, invitation code is 22
+! 4. Bob<bob@gmail.com> invite you to join game room 408, invitation code is 22
+! 5. Tea<tea@gmail.com> invite you to join game room 703, invitation code is 44444

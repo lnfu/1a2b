@@ -1,4 +1,4 @@
-#define QUERY_SIZE 256
+#define QUERY_SIZE 512
 #define ROW_SIZE 64
 
 #include <mysql/mysql.h>
@@ -136,7 +136,7 @@ int get_user_id_by_current_fd(MYSQL *connection, const int current_fd, char *cur
   char query[QUERY_SIZE] = {0};
   int user_id = 0;
 
-  printf("Check current_fd is not logged in yet... ");
+  printf("Check current_fd is logged in yet... ");
 
   sprintf(query, "SELECT username, id FROM users WHERE online_fd=%d;", current_fd);
   execute_mysql_query(connection, query);
@@ -178,7 +178,7 @@ bool check_username_exist(MYSQL *connection, const char *username) {
   return true;
 }
 
-bool check_user_is_not_logged_in(MYSQL *connection, const char *username) {
+bool check_user_is_not_logged_in_by_username(MYSQL *connection, const char *username) {
   MYSQL_RES *result;
   MYSQL_ROW row;
   char query[QUERY_SIZE] = {0};
@@ -204,6 +204,39 @@ bool check_user_is_not_logged_in(MYSQL *connection, const char *username) {
   mysql_free_result(result);
 
   return true;
+}
+
+
+
+int get_online_fd_by_email(MYSQL *connection, const char *email) {
+  MYSQL_RES *result;
+  MYSQL_ROW row;
+  int online_fd = 0;
+  char query[QUERY_SIZE] = {0};
+
+  printf("Check the user is not logged in yet... ");
+
+  sprintf(query, "SELECT online_fd FROM users WHERE email='%s';", email);
+  execute_mysql_query(connection, query);
+
+  result = mysql_use_result(connection);
+  row = mysql_fetch_row(result);
+
+  if (row[0] == NULL) {
+    printf("user is not logged in\n");
+
+    mysql_free_result(result);
+
+    return 0;
+  }
+
+  sscanf(row[0], "%d", &online_fd);
+
+  printf("done\n");
+
+  mysql_free_result(result);
+
+  return online_fd;
 }
 
 bool check_passwd_is_correct(MYSQL *connection, const char *username, const char *passwd) {
@@ -251,6 +284,45 @@ bool check_current_fd_is_not_in_room(MYSQL *connection, const int current_fd, un
 
   return false;
 }
+
+
+
+
+
+void get_email_by_online_fd(MYSQL *connection, const int online_fd, char *email) {
+  MYSQL_RES *result;
+  MYSQL_ROW row;
+  char query[QUERY_SIZE] = {0};
+
+  sprintf(query, "SELECT email FROM users WHERE online_fd='%d';", online_fd);
+  execute_mysql_query(connection, query);
+
+  result = mysql_use_result(connection);
+  row = mysql_fetch_row(result);
+
+  sscanf(row[0], "%s", email);
+
+  mysql_free_result(result);
+}
+
+
+void get_username_by_online_fd(MYSQL *connection, const int online_fd, char *username) {
+  MYSQL_RES *result;
+  MYSQL_ROW row;
+  char query[QUERY_SIZE] = {0};
+
+  sprintf(query, "SELECT username FROM users WHERE online_fd='%d';", online_fd);
+  execute_mysql_query(connection, query);
+
+  result = mysql_use_result(connection);
+  row = mysql_fetch_row(result);
+
+  sscanf(row[0], "%s", username);
+
+  mysql_free_result(result);
+}
+
+
 
 
 // 看有沒有重複 room_id
@@ -485,4 +557,27 @@ void get_room_answer(MYSQL *connection, const unsigned int room_id, char *answer
   printf("done\n");
 
   mysql_free_result(result);
+}
+unsigned int get_room_invitation_code(MYSQL *connection, const unsigned int room_id) {
+  MYSQL_RES *result;
+  MYSQL_ROW row;
+  char query[QUERY_SIZE] = {0};
+  unsigned int invitation_code = 0;
+
+  printf("Query the invitation code in this room... ");
+
+  memset(query, 0, QUERY_SIZE);
+  sprintf(query, "SELECT code FROM rooms WHERE id=%u", room_id);
+  execute_mysql_query(connection, query);
+
+  result = mysql_use_result(connection);
+  row = mysql_fetch_row(result);
+
+  sscanf(row[0], "%u", &invitation_code);
+
+  printf("done\n");
+
+  mysql_free_result(result);
+
+  return invitation_code;
 }

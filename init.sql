@@ -20,8 +20,19 @@ CREATE TABLE IF NOT EXISTS rooms (
     answer VARCHAR(255)
 );
 
+CREATE TABLE IF NOT EXISTS invitations (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+	inviter_username VARCHAR(255),
+	inviter_email VARCHAR(255),
+	room_id BIGINT,
+	invitation_code BIGINT,
+	invitee_online_fd INT
+);
+
+
 SHOW TABLES;
 DESC users;
 DESC rooms;
+DESC invitations;
 
 

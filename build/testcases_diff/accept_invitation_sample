@@ -1,0 +1,23 @@
+*** testcases_correct/accept_invitation_sample
+--- build/testcases_your/accept_invitation_sample
+***************
+*** 17,34 ****
+  (1) You are already in game room 101, please leave game room
+  (1) You leave game room 101
+  (Broadcast to 0) Bob leave game room 101
+- (1) You join game room 102
+- (Broadcast to 2) Welcome, Bob to game!
+- (1) You leave game room 102
+- (Broadcast to 2) Bob leave game room 102
+- (2) Game start! Current player is David
+- (1) Game has started, you can't join now
+- (2) David guess '1001' and got Bingo!!! David wins the game, game ends
+- (1) You join game room 102
+- (Broadcast to 2) Welcome, Bob to game!
+- (1) You leave game room 102
+- (Broadcast to 2) Bob leave game room 102
+- (1) Goodbye, Bob
+- (1) Welcome, Bob
+- (1) You join game room 102
+- (Broadcast to 2) Welcome, Bob to game!
+--- 17,19 ----

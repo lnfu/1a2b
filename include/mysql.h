@@ -11,6 +11,9 @@ bool username_and_email_are_unique(MYSQL *connection, char *username, char *emai
 unsigned int get_room_id_user_is_host(MYSQL *connection, const int current_fd);
 void register_user(MYSQL *connection, char *username, char *email, char *passwd);
 
+
+
+
 // -----------------------------------------------------------
 
 bool check_current_fd_is_not_in_room(MYSQL *connection, const int current_fd, unsigned int *room_id);
@@ -22,7 +25,11 @@ int get_user_id_by_current_fd(MYSQL *connection, const int current_fd, char *cur
 // -----------------------------------------------------------
 
 bool check_username_exist(MYSQL *connection, const char *username);
-bool check_user_is_not_logged_in(MYSQL *connection, const char *username);
+bool check_user_is_not_logged_in_by_username(MYSQL *connection, const char *username);
+int get_online_fd_by_email(MYSQL *connection, const char *email);
+
+void get_email_by_online_fd(MYSQL *connection, const int online_fd, char *email);
+void get_username_by_online_fd(MYSQL *connection, const int online_fd, char *username);
 
 // -----------------------------------------------------------
 bool is_room_start(MYSQL *connection, const unsigned int room_id);
@@ -44,5 +51,6 @@ void get_username_by_user_id(MYSQL *connection, const int user_id, char *usernam
 
 
 
+unsigned int get_room_invitation_code(MYSQL *connection, const unsigned int room_id);
 // --------------------
 // *******************

@@ -1,0 +1,13 @@
+*** testcases_correct/private_room_sample
+--- build/testcases_your/private_room_sample
+***************
+*** 11,18 ****
+  (Broadcast to 2) You receive invitation from Alice<alice@gmail.com>
+  (1) List invitations
+  1. Alice<alice@gmail.com> invite you to join game room 101, invitation code is 12345
+- (1) You join game room 101
+- (Broadcast to 0) Welcome, Bob to game!
+- (2) You join game room 101
+- (Broadcast to 0) Welcome, David to game!
+- (Broadcast to 1) Welcome, David to game!
+--- 11,13 ----
