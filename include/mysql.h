@@ -36,9 +36,13 @@ bool is_user_host(MYSQL *connection, const int user_id);
 
 int get_room_user_count(MYSQL *connection, const unsigned int room_id);
 int get_current_playing_user_id_in_room(MYSQL *connection, const unsigned int room_id);
-
-
+void get_room_answer(MYSQL *connection, const unsigned int room_id, char *answer);
+int get_current_serial_number_in_room(MYSQL *connection, const unsigned int room_id);
 
 // -----------------------------------------
 void get_username_by_user_id(MYSQL *connection, const int user_id, char *username);
+
+
+
+// --------------------
 // *******************

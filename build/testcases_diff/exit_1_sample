@@ -5,15 +5,8 @@
   1. Alice<alice@gmail.com> Online
   2. Bob<bob@gmail.com> Online
   (1) List Game Rooms
-! No Rooms
+- No Rooms
   (1) List Users
-! 1. Alice<alice@gmail.com> Offline
+  1. Alice<alice@gmail.com> Offline
   2. Bob<bob@gmail.com> Online
---- 11,17 ----
-  1. Alice<alice@gmail.com> Online
-  2. Bob<bob@gmail.com> Online
-  (1) List Game Rooms
-! 1. (Public) Game Room 123 is open for players
-  (1) List Users
-! 1. Alice<alice@gmail.com> Online
-  2. Bob<bob@gmail.com> Online
+--- 11,16 ----

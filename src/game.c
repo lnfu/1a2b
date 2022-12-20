@@ -35,7 +35,7 @@ bool game(char *ans, char *guess, int *a, int *b) {
 
 
   printf("%dA%dB\n", *a, *b);
-  return *a != 4;
+  return *a == 4;  // if a == 4 then bingo
 }
 
 

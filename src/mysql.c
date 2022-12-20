@@ -384,6 +384,30 @@ int get_room_user_count(MYSQL *connection, const unsigned int room_id) {
   return number;
 }
 
+
+int get_current_serial_number_in_room(MYSQL *connection, const unsigned int room_id) {
+  MYSQL_RES *result;
+  MYSQL_ROW row;
+  char query[QUERY_SIZE] = {0};
+  int serial_number = 0;
+
+  printf("Query the current serial number in this room... ");
+
+  // get serial number
+  memset(query, 0, QUERY_SIZE);
+  sprintf(query, "SELECT current_serial_number FROM rooms WHERE id=%u", room_id);
+  execute_mysql_query(connection, query);
+  result = mysql_use_result(connection);
+  row = mysql_fetch_row(result);
+  sscanf(row[0], "%d", &serial_number);
+  mysql_free_result(result);
+
+  printf("done\n");
+
+  return serial_number;
+}
+
+
 int get_current_playing_user_id_in_room(MYSQL *connection, const unsigned int room_id) {
   MYSQL_RES *result;
   MYSQL_ROW row;
@@ -437,4 +461,28 @@ void get_username_by_user_id(MYSQL *connection, const int user_id, char *usernam
 
 
   printf("done (username = %s)\n", username);
+}
+
+
+
+
+void get_room_answer(MYSQL *connection, const unsigned int room_id, char *answer) {
+  MYSQL_RES *result;
+  MYSQL_ROW row;
+  char query[QUERY_SIZE] = {0};
+
+  printf("Query the game answer in this room... ");
+
+  memset(query, 0, QUERY_SIZE);
+  sprintf(query, "SELECT answer FROM rooms WHERE id=%u", room_id);
+  execute_mysql_query(connection, query);
+
+  result = mysql_use_result(connection);
+  row = mysql_fetch_row(result);
+
+  sscanf(row[0], "%s", answer);
+
+  printf("done\n");
+
+  mysql_free_result(result);
 }
