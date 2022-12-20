@@ -1,5 +1,7 @@
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
 
 
 bool game(char *ans, char *guess, int *a, int *b) {
@@ -37,7 +39,7 @@ bool game(char *ans, char *guess, int *a, int *b) {
 }
 
 
-void gen_answer(char *ans) {
+void generate_answer(char *ans) {
   srand(time(NULL));
   char a[2];
   for (int i = 0; i < 4; i++) {

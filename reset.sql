@@ -11,3 +11,5 @@ SELECT * FROM users;
 
 
 SELECT * FROM rooms;
+
+SELECT * FROM users WHERE username='Alice' AND passwd='2';

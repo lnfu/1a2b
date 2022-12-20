@@ -18,3 +18,6 @@
 (0) You create public game room 105
 (1) You join game room 105
 (Broadcast to 0) Welcome, Bob to game!
+(0) Game start! Current player is Alice
+(Broadcast to 1) Game start! Current player is Alice
+(2) Game has started, you can't join now

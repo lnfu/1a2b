@@ -370,3 +370,71 @@ void send_message_to_others_in_room(MYSQL *connection, const unsigned int room_i
 
 
 // ********************************
+
+int get_room_user_count(MYSQL *connection, const unsigned int room_id) {
+  char query[QUERY_SIZE] = {0};
+
+  printf("Query the number of users in this room... ");
+
+  memset(query, 0, QUERY_SIZE);
+  sprintf(query, "SELECT * FROM users WHERE room_id=%u", room_id);
+  int number = get_mysql_query_result_row_count(connection, query);
+
+  printf("done (number = %d)\n", number);
+  return number;
+}
+
+int get_current_playing_user_id_in_room(MYSQL *connection, const unsigned int room_id) {
+  MYSQL_RES *result;
+  MYSQL_ROW row;
+  char query[QUERY_SIZE] = {0};
+  int serial_number = 0;
+  int user_id = 0;
+
+  printf("Query the current playing user id in this room... ");
+
+  // get serial number
+  memset(query, 0, QUERY_SIZE);
+  sprintf(query, "SELECT current_serial_number FROM rooms WHERE id=%u", room_id);
+  execute_mysql_query(connection, query);
+  result = mysql_use_result(connection);
+  row = mysql_fetch_row(result);
+  sscanf(row[0], "%d", &serial_number);
+  mysql_free_result(result);
+
+  // get user id
+  memset(query, 0, QUERY_SIZE);
+  sprintf(query, "SELECT id FROM users WHERE room_id=%u AND serial_number_in_room=%d", room_id, serial_number);
+  execute_mysql_query(connection, query);
+  result = mysql_use_result(connection);
+  row = mysql_fetch_row(result);
+  sscanf(row[0], "%d", &user_id);
+  mysql_free_result(result);
+
+
+  printf("done\n");
+
+  return user_id;
+}
+
+
+void get_username_by_user_id(MYSQL *connection, const int user_id, char *username) {
+  MYSQL_RES *result;
+  MYSQL_ROW row;
+  char query[QUERY_SIZE] = {0};
+
+  printf("Query the username... ");
+
+  // get serial number
+  memset(query, 0, QUERY_SIZE);
+  sprintf(query, "SELECT username FROM users WHERE id=%d", user_id);
+  execute_mysql_query(connection, query);
+  result = mysql_use_result(connection);
+  row = mysql_fetch_row(result);
+
+  sscanf(row[0], "%s", username);
+  mysql_free_result(result);
+
+
+  printf("done (username = %s)\n", username);
+}
