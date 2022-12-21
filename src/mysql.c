@@ -2,8 +2,9 @@
 #define ROW_SIZE 64
 
 #include <mysql/mysql.h>
+#include <stdbool.h>
 #include <stdio.h>
-#include <stdlib.h>  // exit(1)
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -54,7 +55,6 @@ void execute_mysql_query_and_print(MYSQL *connection, const char *query, const i
 }
 
 int get_mysql_query_result_row_count(MYSQL *connection, const char *query) {
-  // * MySQL query
   execute_mysql_query(connection, query);
 
   MYSQL_RES *result = mysql_store_result(connection);
@@ -64,6 +64,10 @@ int get_mysql_query_result_row_count(MYSQL *connection, const char *query) {
   return query_result_row_count;
 }
 
+
+
+
+// register
 bool username_and_email_are_unique(MYSQL *connection, const char *username, const char *email) {
   char query[QUERY_SIZE] = {0};
   sprintf(query, "SELECT * FROM users WHERE username = '%s' OR email='%s';", username, email);
@@ -76,7 +80,6 @@ bool username_and_email_are_unique(MYSQL *connection, const char *username, cons
 
   return (row_count == 0);
 }
-
 void register_user(MYSQL *connection, const char *username, const char *email, const char *passwd) {
   printf("Register a new user... ");
 
@@ -85,44 +88,6 @@ void register_user(MYSQL *connection, const char *username, const char *email, c
   execute_mysql_query(connection, query);
 
   printf("done\n");
-}
-
-
-unsigned int get_room_id_user_is_host(MYSQL *connection, const int current_fd) {
-  printf("Check user the host of his room... ");
-
-  MYSQL_RES *result;
-  MYSQL_ROW row;
-  char query[QUERY_SIZE] = {0};
-
-  // first query for current_fd's user id (users table)
-  memset(query, 0, QUERY_SIZE);
-  sprintf(query, "SELECT id FROM users WHERE online_fd=%d", current_fd);
-  execute_mysql_query(connection, query);
-
-  result = mysql_use_result(connection);
-  row = mysql_fetch_row(result);
-  int id;
-  sscanf(row[0], "%d", &id);
-
-
-  // second to check if he is host (rooms table)
-  unsigned int room_id;
-  memset(query, 0, QUERY_SIZE);
-  sprintf(query, "SELECT id FROM rooms WHERE host=%d", id);
-  execute_mysql_query(connection, query);
-  result = mysql_use_result(connection);
-  row = mysql_fetch_row(result);
-  if (row == NULL) {
-    // not a host
-    mysql_free_result(result);
-    return 0;
-  }
-  sscanf(row[0], "%u", room_id);
-
-
-  printf("done\n");
-  return room_id;
 }
 
 
@@ -256,12 +221,16 @@ bool check_passwd_is_correct(MYSQL *connection, const char *username, const char
   return true;
 }
 
-bool check_current_fd_is_not_in_room(MYSQL *connection, const int current_fd, unsigned int *room_id) {
+bool check_current_fd_is_in_room(MYSQL *connection, const int current_fd, unsigned int *room_id) {
   MYSQL_RES *result;
   MYSQL_ROW row;
   char query[QUERY_SIZE] = {0};
 
-  printf("Check current_fd is not in room... ");
+  printf("Check current_fd is in room... ");
+
+
+
+
 
   sprintf(query, "SELECT room_id FROM users WHERE online_fd=%d;", current_fd);
   execute_mysql_query(connection, query);
@@ -269,18 +238,22 @@ bool check_current_fd_is_not_in_room(MYSQL *connection, const int current_fd, un
   result = mysql_use_result(connection);
   row = mysql_fetch_row(result);
 
-  if (row[0] == NULL) {
-    printf("done\n");
+  if (row[0] != NULL) {
+    sscanf(row[0], "%u", room_id);
+    printf("done (room_id = %u)\n", *room_id);
 
     mysql_free_result(result);
 
     return true;
   }
 
-  sscanf(row[0], "%u", room_id);
-  printf("current_fd is in room %u\n", *room_id);
+
+
+
 
   mysql_free_result(result);
+
+  printf("current_fd is NOT in room\n");
 
   return false;
 }

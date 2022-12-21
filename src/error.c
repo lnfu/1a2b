@@ -1,7 +1,7 @@
-#include <stdio.h> // perror
-#include <stdlib.h> // exit
+#include <stdio.h>   // perror
+#include <stdlib.h>  // exit
 
 void error_handling(const char *message) {
-    perror(message);
-    exit(1);
+  perror(message);
+  exit(1);
 }

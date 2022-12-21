@@ -16,7 +16,7 @@ void register_user(MYSQL *connection, char *username, char *email, char *passwd)
 
 // -----------------------------------------------------------
 
-bool check_current_fd_is_not_in_room(MYSQL *connection, const int current_fd, unsigned int *room_id);
+bool check_current_fd_is_in_room(MYSQL *connection, const int current_fd, unsigned int *room_id);
 bool check_passwd_is_correct(MYSQL *connection, const char *username, const char *passwd);
 bool room_id_is_unique(MYSQL *connection, const unsigned int room_id);
 void send_message_to_others_in_room(MYSQL *connection, const unsigned int room_id, const char *message);

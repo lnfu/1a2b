@@ -1,5 +1,5 @@
-*** testcases_correct/exit_1_sample
---- build/testcases_your/exit_1_sample
+*** testcases_correct/exit_2_sample
+--- build/testcases_your/exit_2_sample
 ***************
 *** 4,12 ****
   (1) Welcome, Bob

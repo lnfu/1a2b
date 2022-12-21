@@ -1,0 +1,19 @@
+*** testcases_correct/list_rooms_and_users_sample
+--- build/testcases_your/list_rooms_and_users_sample
+***************
+*** 17,26 ****
+  1. (Public) Game Room 1234 is open for players
+  (1) List Game Rooms
+  1. (Public) Game Room 1234 is open for players
+! (0) You leave game room 1234
+! (1) You did not join any game room
+! (1) Goodbye, Bob
+! (0) Goodbye, Alice
+! (0) List Users
+! 1. Alice<alice@gmail.com> Offline
+! 2. Bob<bob@gmail.com> Offline
+--- 17,20 ----
+  1. (Public) Game Room 1234 is open for players
+  (1) List Game Rooms
+  1. (Public) Game Room 1234 is open for players
+! (0) You did not join any game room

@@ -6,7 +6,8 @@ import argparse
 
 BUFFER_SIZE = 1024
 SELECT_TIMEOUT = 0.001
-SLEEP_FOR_SOCKET_READY = 0.025
+# SLEEP_FOR_SOCKET_READY = 0.025
+SLEEP_FOR_SOCKET_READY = 0.1
 SERVER_ADDRESS = 'localhost'
 
 
@@ -59,7 +60,7 @@ class ClientCommand:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser('Client script')
 
-    parser.add_argument('-p', dest='port', type=int, default=9999)
+    parser.add_argument('-p', dest='port', type=int, default=8888)
     parser.add_argument('--src', dest='src_dir', type=str, default='testcases')
     parser.add_argument('--filename', dest='filename', type=str, default='')
     parser.add_argument('--dst',

@@ -10,7 +10,7 @@ parser = argparse.ArgumentParser(
     'Sample demo script\n   To ensure your zip format is correct, please make sure to run this script before submission\n'
 )
 
-parser.add_argument('-p', dest='port', type=int, default=9999)
+parser.add_argument('-p', dest='port', type=int, default=8888)
 parser.add_argument('-s',
                     '--submission',
                     dest='submission',

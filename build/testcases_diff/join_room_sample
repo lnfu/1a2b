@@ -1,17 +1,31 @@
 *** testcases_correct/join_room_sample
 --- build/testcases_your/join_room_sample
 ***************
-*** 13,24 ****
+*** 11,24 ****
+  (Broadcast to 0) Welcome, Bob to game!
+  (2) Welcome, David
   (2) You create private game room 102
-  (1) You leave game room 101
-  (Broadcast to 0) Bob leave game room 101
-- (1) Game room is private, please join game by invitation code
-- (0) You leave game room 101
-- (2) You leave game room 102
-- (0) You create public game room 105
-- (1) You join game room 105
-- (Broadcast to 0) Welcome, Bob to game!
-- (0) Game start! Current player is Alice
-- (Broadcast to 1) Game start! Current player is Alice
-- (2) Game has started, you can't join now
---- 13,15 ----
+! (1) You leave game room 101
+! (Broadcast to 0) Bob leave game room 101
+! (1) Game room is private, please join game by invitation code
+! (0) You leave game room 101
+! (2) You leave game room 102
+! (0) You create public game room 105
+! (1) You join game room 105
+! (Broadcast to 0) Welcome, Bob to game!
+  (0) Game start! Current player is Alice
+  (Broadcast to 1) Game start! Current player is Alice
+! (2) Game has started, you can't join now
+--- 11,22 ----
+  (Broadcast to 0) Welcome, Bob to game!
+  (2) Welcome, David
+  (2) You create private game room 102
+! (1) You did not join any game room
+! (1) You are already in game room 101, please leave game room
+! (0) You did not join any game room
+! (2) You did not join any game room
+! (0) You are already in game room 101, please leave game room
+! (1) You are already in game room 101, please leave game room
+  (0) Game start! Current player is Alice
+  (Broadcast to 1) Game start! Current player is Alice
+! (2) You are already in game room 102, please leave game room

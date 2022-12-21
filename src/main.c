@@ -1,5 +1,11 @@
 #define TEST
-#define PORT 9999
+#define LOCAL_DATABASE
+
+#ifndef SERVER
+#define SERVER 1
+#endif
+
+#define PORT 8888
 #define EPOLL_SIZE 50
 #define BUFFER_SIZE 1024
 #define USERNAME_SIZE 256
@@ -7,8 +13,11 @@
 #define PASSWORD_SIZE 256
 #define QUERY_SIZE 512
 #define ROW_SIZE 64
+
+
 #include <arpa/inet.h>
 #include <mysql/mysql.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -22,20 +31,31 @@
 #include "../include/network.h"
 
 
-
+// does buffer match command keyword?
 int is_string_match(const char *buffer, const char *keyword) { return (strncmp(buffer, keyword, strlen(keyword)) == 0); }
+
+
+
+
+
 int main(int argc, char *argv[]) {
   // MySQL variables
   MYSQL *connection = mysql_init(NULL);
-  char *aws_rds_ip = "localhost";
+  char query[QUERY_SIZE] = {0};
+
   unsigned int aws_rds_port = 3306;
+#ifndef LOCAL_DATABASE  // remote
+  char *aws_rds_ip = "database-1.ctdgsyao1atl.us-east-1.rds.amazonaws.com";
+  char *aws_rds_user = "admin";
+  char *aws_rds_password = "12345678";
+  char *aws_rds_database = "db";
+#endif
+#ifdef LOCAL_DATABASE  // local
+  char *aws_rds_ip = "localhost";
   char *aws_rds_user = "root";
   char *aws_rds_password = "Alchemy@0)3)8)1";
   char *aws_rds_database = "db";
-  // char *aws_rds_ip = "database-1.ctdgsyao1atl.us-east-1.rds.amazonaws.com";
-  // char *aws_rds_user = "admin";
-  // char *aws_rds_password = "12345678";
-  // char *aws_rds_database = "db";
+#endif
 
 
 
@@ -43,19 +63,16 @@ int main(int argc, char *argv[]) {
 
   // socket variables
   int tcp_socket_for_listen;
-  int tcp_socket_for_accept;
   int udp_socket;
   struct sockaddr_in server_address;
   struct sockaddr_in client_address;
-  // socklen_t server_address_size = sizeof(server_address);
-  // socklen_t client_address_size = sizeof(server_address);
 
 
 
 
 
   // EPOLL variables (socket)
-  int epoll_fd;
+  int epoll_fd;                      // file descriptor of epoll
   struct epoll_event *epoll_events;  // store "read change" fd this time
 
 
@@ -64,11 +81,7 @@ int main(int argc, char *argv[]) {
 
   // MySQL connect to AWS RDS
   mysql_connect_remote_database(connection, aws_rds_ip, aws_rds_port, aws_rds_user, aws_rds_password, aws_rds_database);
-
-  char query[QUERY_SIZE] = {0};
-
-
-#ifdef TEST
+#ifdef TEST  // clear data every time
   printf("clear data... ");
   memset(query, 0, QUERY_SIZE);
   sprintf(query, "TRUNCATE TABLE users;");
@@ -80,6 +93,10 @@ int main(int argc, char *argv[]) {
 
   memset(query, 0, QUERY_SIZE);
   sprintf(query, "TRUNCATE TABLE invitations;");
+  execute_mysql_query(connection, query);
+
+  memset(query, 0, QUERY_SIZE);
+  sprintf(query, "TRUNCATE TABLE servers;");
   execute_mysql_query(connection, query);
 
   printf("done\n");
@@ -96,8 +113,7 @@ int main(int argc, char *argv[]) {
 
 
 
-  // set epoll
-
+  // init epoll
   epoll_fd = epoll_create(EPOLL_SIZE);
   epoll_events = malloc(sizeof(struct epoll_event) * EPOLL_SIZE);
 
@@ -114,17 +130,40 @@ int main(int argc, char *argv[]) {
 
 
 
+  // init server table
+  memset(query, 0, QUERY_SIZE);
+  sprintf(query, "INSERT INTO servers (id, number_of_user) VALUES (%d, 0);", SERVER);
+  execute_mysql_query(connection, query);
+
+
+
+
+
   while (1) {
-    int event_count = epoll_wait(epoll_fd, epoll_events, EPOLL_SIZE,
-                                 -1);  // -1 = timeout disable
+    int event_count = epoll_wait(epoll_fd, epoll_events, EPOLL_SIZE, -1);  // -1 = timeout disable
+
+
+
+
+
     if (event_count == -1) {
       puts("epoll_wait() error");
       break;
     }
+
+
+
+
+
     for (int i = 0; i < event_count; i++) {
       int current_fd = epoll_events[i].data.fd;
+
+
+
+
+
       if (current_fd == udp_socket) {
-        // read data from udp socket (=> buffer)
+        // transfer by udp socket
         socklen_t client_address_size = sizeof(client_address);
         char buffer[BUFFER_SIZE] = {0};
         recvfrom(udp_socket, buffer, BUFFER_SIZE, 0, (struct sockaddr *)&client_address, &client_address_size);
@@ -134,44 +173,65 @@ int main(int argc, char *argv[]) {
 
 
 
-        // register (register_sample)
+        // * register <username> <email> <user password>
         if (is_string_match(buffer, "register")) {
-          // parse data
           char username[USERNAME_SIZE] = {0};
           char email[EMAIL_SIZE] = {0};
           char passwd[PASSWORD_SIZE] = {0};
+
+
+
+
+
+          // parse data
           sscanf(buffer, "register %s %s %s", username, email, passwd);
+
+
+
 
 
           // check unique username and email
           printf("Checking unique username and same email... ");
           if (!username_and_email_are_unique(connection, username, email)) {
-            printf("\nSame name or email!\n\n");
+            printf("same name or email!\n");
             sendto(udp_socket, "Username or Email is already used\n", strlen("Username or Email is already used\n"), 0,
                    (struct sockaddr *)&client_address, client_address_size);
+
+            printf("Fail(1)\n");
             continue;
           }
           printf("done\n");
 
 
+
+
+          // Success
+
           // register a new user and return successful message
           register_user(connection, username, email, passwd);
+
+          // return success message
           sendto(udp_socket, "Register Successfully\n", strlen("Register Successfully\n"), 0, (struct sockaddr *)&client_address,
                  client_address_size);
 
           printf("\n");
-
-          // char query[QUERY_SIZE] = {0};
-          // sprintf(query, "SELECT * FROM users;");
-          // execute_mysql_query_and_print(connection, query, 6);
         }
 
 
 
 
 
-        // list users (list_rooms_and_users_sample)
+        // list users
         if (is_string_match(buffer, "list users")) {
+          int count = 0;
+          MYSQL_RES *result;
+          MYSQL_ROW row;
+
+
+
+
+
+          // clear buffer
           memset(buffer, 0, BUFFER_SIZE);
           strcat(buffer, "List Users\n");
 
@@ -191,13 +251,9 @@ int main(int argc, char *argv[]) {
 
 
 
-          MYSQL_RES *result;
-          MYSQL_ROW row;
           // query
           execute_mysql_query(connection, "SELECT username, email, online_fd FROM users ORDER BY username;");
           result = mysql_use_result(connection);
-          // fetch result
-          int count = 0;
           while ((row = mysql_fetch_row(result)) != NULL) {
             count++;
             char temp[ROW_SIZE];
@@ -212,6 +268,7 @@ int main(int argc, char *argv[]) {
 
           // return message
           sendto(udp_socket, buffer, strlen(buffer), 0, (struct sockaddr *)&client_address, client_address_size);
+
           printf("\n");
         }
 
@@ -219,8 +276,17 @@ int main(int argc, char *argv[]) {
 
 
 
-        // list rooms (list_rooms_and_users_sample)
+        // list rooms
         if (is_string_match(buffer, "list rooms")) {
+          int count = 0;
+          MYSQL_RES *result;
+          MYSQL_ROW row;
+
+
+
+
+
+          // clear buffer
           memset(buffer, 0, BUFFER_SIZE);
           strcat(buffer, "List Game Rooms\n");
 
@@ -240,13 +306,10 @@ int main(int argc, char *argv[]) {
 
 
 
-          MYSQL_RES *result;
-          MYSQL_ROW row;
+
           // query
           execute_mysql_query(connection, "SELECT class, id, round FROM rooms ORDER BY id;");
           result = mysql_use_result(connection);
-          // fetch result
-          int count = 0;
           while ((row = mysql_fetch_row(result)) != NULL) {
             count++;
             char temp[ROW_SIZE];
@@ -262,6 +325,7 @@ int main(int argc, char *argv[]) {
 
           // return message
           sendto(udp_socket, buffer, strlen(buffer), 0, (struct sockaddr *)&client_address, client_address_size);
+
           printf("\n");
         }
 
@@ -272,45 +336,44 @@ int main(int argc, char *argv[]) {
       } else if (current_fd == tcp_socket_for_listen) {
         // accept new user
         accept_tcp_connection(tcp_socket_for_listen, epoll_fd);
+
+
+
+
+
       } else {
         char buffer[BUFFER_SIZE] = {0};
         int data_len = read(current_fd, buffer, BUFFER_SIZE);  // read data from tcp socket
         printf("\033[0;32m%s\033[0m", buffer);
 
 
-        if (data_len == 0) {
-          printf("\033[0;32mSPECIAL EXIT\033[0m\n");
-          char current_login_username[USERNAME_SIZE] = {0};
-          int user_id = 0;
+
+
+
+        if (data_len == 0) {  // close request
+          int user_id = 0;    // user_id in users table where online_fd = current_fd
           unsigned int current_room_id = 0;
-          // close request
+          char current_login_username[USERNAME_SIZE] = {0};
 
 
 
+          printf("\033[0;32mSPECIAL EXIT\033[0m\n");
+
+
+
+
+          // get user id
           user_id = get_user_id_by_current_fd(connection, current_fd, current_login_username);
+          // ! user_id exists --> current_fd has logged in --> logout first
           if (user_id != 0) {
-            printf("USER ID = %d\n", user_id);
-
-            if (!check_current_fd_is_not_in_room(connection, current_fd, &current_room_id)) {
-              // TODO: leave room
-
-              if (is_user_host(connection, user_id)) {  // the user is host
-
-                // ! needed?
-                // char success_message[ROW_SIZE] = {0};
-                // sprintf(success_message, "You leave game room %u\n", current_room_id);
-                // write(current_fd, success_message, strlen(success_message));
-
+            // ! the user is in room --> leave room first
+            if (check_current_fd_is_in_room(connection, current_fd, &current_room_id)) {
+              // ! the user is host --> leave room and delete room first
+              if (is_user_host(connection, user_id)) {
                 // update current user's room to null
                 memset(query, 0, QUERY_SIZE);
                 sprintf(query, "UPDATE users SET room_id=NULL, serial_number_in_room=NULL WHERE online_fd=%d;", current_fd);
                 execute_mysql_query(connection, query);
-
-                // ! needed?
-                // broadcast to others
-                // char broadcast_message[ROW_SIZE] = {0};
-                // sprintf(broadcast_message, "Game room manager leave game room %u, you are forced to leave too\n", current_room_id);
-                // send_message_to_others_in_room(connection, current_room_id, broadcast_message);
 
                 // update other user's room to null
                 memset(query, 0, QUERY_SIZE);
@@ -359,8 +422,6 @@ int main(int argc, char *argv[]) {
 
 
               } else {  // the user is NOT host and the room is NOT playing game
-                printf("USER IS NOT HOST AND ROOM IS NOT PLAYING\n");
-                fflush(stdout);
 
                 // ! needed?
                 // char success_message[ROW_SIZE] = {0};
@@ -390,6 +451,12 @@ int main(int argc, char *argv[]) {
             memset(query, 0, QUERY_SIZE);
             sprintf(query, "UPDATE users SET online_fd=NULL WHERE id=%d", user_id);
             execute_mysql_query(connection, query);
+
+
+            // update server table
+            memset(query, 0, QUERY_SIZE);
+            sprintf(query, "UPDATE servers SET number_of_user=number_of_user-1 WHERE id=%d;", SERVER);
+            execute_mysql_query(connection, query);
           }
 
 
@@ -405,6 +472,22 @@ int main(int argc, char *argv[]) {
 
 
         } else {
+          if (is_string_match(buffer, "status")) {
+            for (int i = 0; i < 3; i++) {
+              memset(query, 0, QUERY_SIZE);
+              sprintf(query, "SELECT number_of_user FROM servers WHERE id=%d;", i + 1);
+              execute_mysql_query(connection, query);
+
+              MYSQL_RES *result = mysql_use_result(connection);
+              MYSQL_ROW row = mysql_fetch_row(result);
+
+              char report_message[ROW_SIZE] = {0};
+              sprintf(report_message, "Server%d: %s\n", i + 1, row[0]);
+              write(current_fd, report_message, strlen(report_message));
+
+              mysql_free_result(result);
+            }
+          }
           // login <username> <password> (login_sample)
           if (is_string_match(buffer, "login")) {
             MYSQL_RES *result;
@@ -474,6 +557,13 @@ int main(int argc, char *argv[]) {
             sprintf(success_message, "Welcome, %s\n", input_username);
             write(current_fd, success_message, strlen(success_message));
 
+
+            // update server table
+            memset(query, 0, QUERY_SIZE);
+            sprintf(query, "UPDATE servers SET number_of_user=number_of_user+1 WHERE id=%d;", SERVER);
+            execute_mysql_query(connection, query);
+
+
             printf("\n");
           }
 
@@ -500,7 +590,7 @@ int main(int argc, char *argv[]) {
 
 
             // Fail(2) You are already in game room <game room id>, please leave game room
-            if (!check_current_fd_is_not_in_room(connection, current_fd, &current_room_id)) {
+            if (check_current_fd_is_in_room(connection, current_fd, &current_room_id)) {
               char fail_message[ROW_SIZE] = {0};
               sprintf(fail_message, "You are already in game room %u, please leave game room\n", current_room_id);
               write(current_fd, fail_message, strlen(fail_message));
@@ -519,6 +609,11 @@ int main(int argc, char *argv[]) {
             // update users table
             memset(query, 0, QUERY_SIZE);
             sprintf(query, "UPDATE users SET online_fd=NULL WHERE username='%s'", current_login_username);
+            execute_mysql_query(connection, query);
+
+            // update server table
+            memset(query, 0, QUERY_SIZE);
+            sprintf(query, "UPDATE servers SET number_of_user=number_of_user-1 WHERE id=%d;", SERVER);
             execute_mysql_query(connection, query);
 
 
@@ -554,7 +649,7 @@ int main(int argc, char *argv[]) {
 
 
             // Fail(2) You are already in game room <game room id>, please leave game room
-            if (!check_current_fd_is_not_in_room(connection, current_fd, &current_room_id)) {
+            if (check_current_fd_is_in_room(connection, current_fd, &current_room_id)) {
               char fail_message[ROW_SIZE] = {0};
               sprintf(fail_message, "You are already in game room %u, please leave game room\n", current_room_id);
               write(current_fd, fail_message, strlen(fail_message));
@@ -622,7 +717,7 @@ int main(int argc, char *argv[]) {
 
 
             // Fail(2) You are already in game room <game room id>, please leave game room
-            if (!check_current_fd_is_not_in_room(connection, current_fd, &current_room_id)) {
+            if (check_current_fd_is_in_room(connection, current_fd, &current_room_id)) {
               char fail_message[ROW_SIZE] = {0};
               sprintf(fail_message, "You are already in game room %u, please leave game room\n", current_room_id);
               write(current_fd, fail_message, strlen(fail_message));
@@ -690,7 +785,7 @@ int main(int argc, char *argv[]) {
 
 
             // Fail(2) You are already in game room <game room id>, please leave game room
-            if (!check_current_fd_is_not_in_room(connection, current_fd, &current_room_id)) {
+            if (check_current_fd_is_in_room(connection, current_fd, &current_room_id)) {
               char fail_message[ROW_SIZE] = {0};
               sprintf(fail_message, "You are already in game room %u, please leave game room\n", current_room_id);
               write(current_fd, fail_message, strlen(fail_message));
@@ -783,7 +878,7 @@ int main(int argc, char *argv[]) {
 
 
             // Fail(2) You did not join any game room
-            if (check_current_fd_is_not_in_room(connection, current_fd, &current_room_id)) {
+            if (!check_current_fd_is_in_room(connection, current_fd, &current_room_id)) {
               write(current_fd, "You did not join any game room\n", strlen("You did not join any game room\n"));
 
               printf("Fail(2)\n\n");
@@ -934,7 +1029,7 @@ int main(int argc, char *argv[]) {
 
 
             // Fail(2) You did not join any game room
-            if (check_current_fd_is_not_in_room(connection, current_fd, &current_room_id)) {
+            if (!check_current_fd_is_in_room(connection, current_fd, &current_room_id)) {
               write(current_fd, "You did not join any game room\n", strlen("You did not join any game room\n"));
 
               printf("Fail(2)\n\n");
@@ -1076,7 +1171,7 @@ int main(int argc, char *argv[]) {
 
 
             // Fail(2) You are already in game room <game room id>, please leave game room
-            if (!check_current_fd_is_not_in_room(connection, current_fd, &current_room_id)) {
+            if (check_current_fd_is_in_room(connection, current_fd, &current_room_id)) {
               char fail_message[ROW_SIZE] = {0};
               sprintf(fail_message, "You are already in game room %u, please leave game room\n", current_room_id);
               write(current_fd, fail_message, strlen(fail_message));
@@ -1162,7 +1257,7 @@ int main(int argc, char *argv[]) {
 
 
           // start game <number of rounds> <guess number>
-          if (strncmp(buffer, "start game", strlen("start game")) == 0) {
+          if (is_string_match(buffer, "start game")) {
             int input_number_of_round = 0;
             int number_of_argument = 0;
             int user_id = 0;
@@ -1192,7 +1287,7 @@ int main(int argc, char *argv[]) {
 
 
             // Fail(2) You did not join any game room
-            if (check_current_fd_is_not_in_room(connection, current_fd, &current_room_id)) {
+            if (!check_current_fd_is_in_room(connection, current_fd, &current_room_id)) {
               write(current_fd, "You did not join any game room\n", strlen("You did not join any game room\n"));
 
               printf("Fail(2)\n\n");
@@ -1250,8 +1345,7 @@ int main(int argc, char *argv[]) {
 
 
 
-
-          if (strncmp(buffer, "guess", strlen("guess")) == 0) {
+          if (is_string_match(buffer, "guess")) {
             char guess[ROW_SIZE] = {0};
             int user_id = 0;
             char current_login_username[USERNAME_SIZE] = {0};
@@ -1274,7 +1368,7 @@ int main(int argc, char *argv[]) {
 
 
             // Fail(2) You did not join any game room
-            if (check_current_fd_is_not_in_room(connection, current_fd, &current_room_id)) {
+            if (!check_current_fd_is_in_room(connection, current_fd, &current_room_id)) {
               write(current_fd, "You did not join any game room\n", strlen("You did not join any game room\n"));
 
               printf("Fail(2)\n\n");
@@ -1405,8 +1499,7 @@ int main(int argc, char *argv[]) {
 
 
 
-
-          if (strncmp(buffer, "exit", strlen("exit")) == 0) {
+          if (is_string_match(buffer, "exit")) {
             char current_login_username[USERNAME_SIZE] = {0};
             int user_id = 0;
             unsigned int current_room_id = 0;
@@ -1416,7 +1509,7 @@ int main(int argc, char *argv[]) {
 
             user_id = get_user_id_by_current_fd(connection, current_fd, current_login_username);
             if (user_id != 0) {
-              if (!check_current_fd_is_not_in_room(connection, current_fd, &current_room_id)) {
+              if (check_current_fd_is_in_room(connection, current_fd, &current_room_id)) {
                 // TODO: leave room
 
                 if (is_user_host(connection, user_id)) {  // the user is host
@@ -1513,6 +1606,13 @@ int main(int argc, char *argv[]) {
               // TODO: logout
               memset(query, 0, QUERY_SIZE);
               sprintf(query, "UPDATE users SET online_fd=NULL WHERE id=%d", user_id);
+              execute_mysql_query(connection, query);
+
+
+
+              // update server table
+              memset(query, 0, QUERY_SIZE);
+              sprintf(query, "UPDATE servers SET number_of_user=number_of_user-1 WHERE id=%d;", SERVER);
               execute_mysql_query(connection, query);
             }
 
