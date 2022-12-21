@@ -370,76 +370,67 @@ int main(int argc, char *argv[]) {
             if (check_current_fd_is_in_room(connection, current_fd, &current_room_id)) {
               // ! the user is host --> leave room and delete room first
               if (is_user_host(connection, user_id)) {
+                // * USERS TABLE: update all user's room_id=NULL and serial_number_in_room=NULL in this room (room_id)
+                evict_all_users_from_room(connection, current_room_id);
+
+                // * ROOMS TABLE: delete room
+                delete_room(connection, current_room_id);
+
+
+
+
+                // ! the user is NOT host and the room is playing game
+              } else if (is_room_start(connection, current_room_id)) {
                 // update current user's room to null
                 memset(query, 0, QUERY_SIZE);
                 sprintf(query, "UPDATE users SET room_id=NULL, serial_number_in_room=NULL WHERE online_fd=%d;", current_fd);
                 execute_mysql_query(connection, query);
 
-                // update other user's room to null
+
+
+                // * change the serial number of user after him
+                // get serial_number of this user
+                int serial_number = get_serial_number_in_room_by_user_id(connection, user_id);
                 memset(query, 0, QUERY_SIZE);
-                sprintf(query, "UPDATE users SET room_id=NULL, serial_number_in_room=NULL WHERE room_id=%u;", current_room_id);
+                sprintf(query,
+                        "UPDATE users SET serial_number_in_room=serial_number_in_room-1 WHERE room_id=%u AND serial_number_in_room>%d;",
+                        current_room_id, serial_number);
                 execute_mysql_query(connection, query);
 
-                // TODO: change the serial number of user after him
 
-                // delete room
-                // DELETE FROM table_name WHERE condition;
+
+                // * make room round = 0
                 memset(query, 0, QUERY_SIZE);
-                sprintf(query, "DELETE FROM rooms WHERE id=%u;", current_room_id);
+                sprintf(query, "UPDATE rooms SET round=0 WHERE id=%u;", current_room_id);
                 execute_mysql_query(connection, query);
 
 
 
 
-
-              } else if (is_room_start(connection, current_room_id)) {  // the user is NOT host and the room is playing game
-                printf("USER IS NOT HOST BUT ROOM IS PLAYING\n");
-                fflush(stdout);
-
-                // !needed?
-                // char success_message[ROW_SIZE] = {0};
-                // sprintf(success_message, "You leave game room %u, game ends\n", current_room_id);
-                // write(current_fd, success_message, strlen(success_message));
-
-                // update current user's room to null
-                memset(query, 0, QUERY_SIZE);
-                sprintf(query, "UPDATE users SET room_id=NULL, serial_number_in_room=NULL WHERE online_fd=%d;", current_fd);
-                execute_mysql_query(connection, query);
-
-                // ! needed?
-                // broadcast to others
-                // char broadcast_message[ROW_SIZE] = {0};
-                // sprintf(broadcast_message, "%s leave game room %u, game ends\n", current_login_username, current_room_id);
-                // send_message_to_others_in_room(connection, current_room_id, broadcast_message);
-
-
-                // TODO: change the serial number of user after him
-
-                // TODO: make room round = 0
+                // ! the user is NOT host and the room is NOT playing game
+              } else {
+                int serial_number = get_serial_number_in_room_by_user_id(connection, user_id);
 
 
 
 
-
-              } else {  // the user is NOT host and the room is NOT playing game
-
-                // ! needed?
-                // char success_message[ROW_SIZE] = {0};
-                // sprintf(success_message, "You leave game room %u\n", current_room_id);
-                // write(current_fd, success_message, strlen(success_message));
 
                 // update current user's room to null
                 memset(query, 0, QUERY_SIZE);
                 sprintf(query, "UPDATE users SET room_id=NULL, serial_number_in_room=NULL WHERE online_fd=%d;", current_fd);
                 execute_mysql_query(connection, query);
 
-                // ! needed?
-                // broadcast to others
-                // char broadcast_message[ROW_SIZE] = {0};
-                // sprintf(broadcast_message, "%s leave game room %u\n", current_login_username, current_room_id);
-                // send_message_to_others_in_room(connection, current_room_id, broadcast_message);
 
-                // TODO: change the serial number of user after him
+
+
+
+                // * change the serial number of user after him
+                // get serial_number of this user
+                memset(query, 0, QUERY_SIZE);
+                sprintf(query,
+                        "UPDATE users SET serial_number_in_room=serial_number_in_room-1 WHERE room_id=%u AND serial_number_in_room>%d;",
+                        current_room_id, serial_number);
+                execute_mysql_query(connection, query);
               }
             }
 
@@ -447,10 +438,13 @@ int main(int argc, char *argv[]) {
 
 
 
-            // TODO: logout
+            // logout
             memset(query, 0, QUERY_SIZE);
             sprintf(query, "UPDATE users SET online_fd=NULL WHERE id=%d", user_id);
             execute_mysql_query(connection, query);
+
+
+
 
 
             // update server table
@@ -488,7 +482,12 @@ int main(int argc, char *argv[]) {
               mysql_free_result(result);
             }
           }
-          // login <username> <password> (login_sample)
+
+
+
+
+
+          // login <username> <password>
           if (is_string_match(buffer, "login")) {
             MYSQL_RES *result;
             MYSQL_ROW row;
@@ -571,7 +570,7 @@ int main(int argc, char *argv[]) {
 
 
 
-          // logout (logout_sample)
+          // logout
           if (is_string_match(buffer, "logout")) {
             unsigned int current_room_id = 0;
             int user_id = 0;
@@ -1097,6 +1096,8 @@ int main(int argc, char *argv[]) {
 
 
 
+
+
           if (is_string_match(buffer, "list invitations")) {
             memset(buffer, 0, BUFFER_SIZE);
             strcat(buffer, "List invitations\n");
@@ -1195,15 +1196,6 @@ int main(int argc, char *argv[]) {
 
 
             // Fail(4) Your invitation code is incorrect
-            // memset(query, 0, QUERY_SIZE);
-            // sprintf(query, "SELECT * FROM invitations WHERE inviter_email='%s' AND invitee_online_fd=%d AND invitation_code=%u",
-            //         inviter_email, current_fd, invitation_code);
-            // if (get_mysql_query_result_row_count(connection, query) == 0) {
-            //   write(current_fd, "Your invitation code is incorrect\n", strlen("Your invitation code is incorrect\n"));
-
-            //   printf("Fail(4)\n\n");
-            //   continue;
-            // }
             memset(query, 0, QUERY_SIZE);
             sprintf(query, "SELECT room_id FROM invitations WHERE inviter_email='%s' AND invitee_online_fd=%d AND invitation_code=%u",
                     inviter_email, current_fd, invitation_code);
@@ -1441,7 +1433,7 @@ int main(int argc, char *argv[]) {
 
 
             // Success (Not Bingo)
-            // TODO: updates current_serial_number + 1
+            //  updates current_serial_number + 1
             memset(query, 0, QUERY_SIZE);
             sprintf(query, "UPDATE rooms SET current_serial_number=current_serial_number+1 WHERE id=%u;", current_room_id);
             execute_mysql_query(connection, query);
@@ -1449,7 +1441,7 @@ int main(int argc, char *argv[]) {
 
 
 
-            // TODO: if current_serial_number == get_room_user_count --> update round - 1
+            // if current_serial_number == get_room_user_count --> update round - 1
             if (get_current_serial_number_in_room(connection, current_room_id) == get_room_user_count(connection, current_room_id)) {
               memset(query, 0, QUERY_SIZE);
               sprintf(query, "UPDATE rooms SET current_serial_number=0, round=round-1 WHERE id=%u;", current_room_id);
@@ -1487,115 +1479,93 @@ int main(int argc, char *argv[]) {
 
 
             continue;
-            printf("BREAK POINT\n");
-
-            // char broadcast_message[ROW_RESULT] = {0};
-            // sprintf(broadcast_message, "%s guess '%s' and got '%dA%dB'\n", current_login_username, guess, a, b);
-            // send_message_to_others_in_room(connection, current_room_id, broadcast_message);
-
-            // printf("Success (Not Bingo)\n\n");
           }
 
 
 
 
+
           if (is_string_match(buffer, "exit")) {
-            char current_login_username[USERNAME_SIZE] = {0};
-            int user_id = 0;
+            int user_id = 0;  // user_id in users table where online_fd = current_fd
             unsigned int current_room_id = 0;
-            // close request
+            char current_login_username[USERNAME_SIZE] = {0};
 
 
 
+            printf("\033[0;32mSPECIAL EXIT\033[0m\n");
+
+
+
+
+            // get user id
             user_id = get_user_id_by_current_fd(connection, current_fd, current_login_username);
+            // ! user_id exists --> current_fd has logged in --> logout first
             if (user_id != 0) {
+              // ! the user is in room --> leave room first
               if (check_current_fd_is_in_room(connection, current_fd, &current_room_id)) {
-                // TODO: leave room
+                // ! the user is host --> leave room and delete room first
+                if (is_user_host(connection, user_id)) {
+                  // * USERS TABLE: update all user's room_id=NULL and serial_number_in_room=NULL in this room (room_id)
+                  evict_all_users_from_room(connection, current_room_id);
 
-                if (is_user_host(connection, user_id)) {  // the user is host
+                  // * ROOMS TABLE: delete room
+                  delete_room(connection, current_room_id);
 
-                  printf("USER IS HOST\n");
-                  fflush(stdout);
 
-                  // ! needed?
-                  // char success_message[ROW_SIZE] = {0};
-                  // sprintf(success_message, "You leave game room %u\n", current_room_id);
-                  // write(current_fd, success_message, strlen(success_message));
+
+
+                  // ! the user is NOT host and the room is playing game
+                } else if (is_room_start(connection, current_room_id)) {
+                  // update current user's room to null
+                  memset(query, 0, QUERY_SIZE);
+                  sprintf(query, "UPDATE users SET room_id=NULL, serial_number_in_room=NULL WHERE online_fd=%d;", current_fd);
+                  execute_mysql_query(connection, query);
+
+
+
+                  // * change the serial number of user after him
+                  // get serial_number of this user
+                  int serial_number = get_serial_number_in_room_by_user_id(connection, user_id);
+                  memset(query, 0, QUERY_SIZE);
+                  sprintf(query,
+                          "UPDATE users SET serial_number_in_room=serial_number_in_room-1 WHERE room_id=%u AND serial_number_in_room>%d;",
+                          current_room_id, serial_number);
+                  execute_mysql_query(connection, query);
+
+
+
+                  // * make room round = 0
+                  memset(query, 0, QUERY_SIZE);
+                  sprintf(query, "UPDATE rooms SET round=0 WHERE id=%u;", current_room_id);
+                  execute_mysql_query(connection, query);
+
+
+
+
+                  // ! the user is NOT host and the room is NOT playing game
+                } else {
+                  int serial_number = get_serial_number_in_room_by_user_id(connection, user_id);
+
+
+
+
 
                   // update current user's room to null
                   memset(query, 0, QUERY_SIZE);
                   sprintf(query, "UPDATE users SET room_id=NULL, serial_number_in_room=NULL WHERE online_fd=%d;", current_fd);
                   execute_mysql_query(connection, query);
 
-                  // ! needed?
-                  // broadcast to others
-                  // char broadcast_message[ROW_SIZE] = {0};
-                  // sprintf(broadcast_message, "Game room manager leave game room %u, you are forced to leave too\n", current_room_id);
-                  // send_message_to_others_in_room(connection, current_room_id, broadcast_message);
 
-                  // update other user's room to null
+
+
+
+                  // * change the serial number of user after him
+                  // get serial_number of this user
                   memset(query, 0, QUERY_SIZE);
-                  sprintf(query, "UPDATE users SET room_id=NULL, serial_number_in_room=NULL WHERE room_id=%u;", current_room_id);
+                  sprintf(query,
+                          "UPDATE users SET serial_number_in_room=serial_number_in_room-1 WHERE room_id=%u AND serial_number_in_room>%d;",
+                          current_room_id, serial_number);
                   execute_mysql_query(connection, query);
-
-                  // TODO: change the serial number of user after him
-
-                  // delete room
-                  // DELETE FROM table_name WHERE condition;
-                  memset(query, 0, QUERY_SIZE);
-                  sprintf(query, "DELETE FROM rooms WHERE id=%u;", current_room_id);
-                  execute_mysql_query(connection, query);
-
-
-
-
-
-                } else if (is_room_start(connection, current_room_id)) {  // the user is NOT host and the room is playing game
-
-                  // !needed?
-                  // char success_message[ROW_SIZE] = {0};
-                  // sprintf(success_message, "You leave game room %u, game ends\n", current_room_id);
-                  // write(current_fd, success_message, strlen(success_message));
-
-                  // update current user's room to null
-                  memset(query, 0, QUERY_SIZE);
-                  sprintf(query, "UPDATE users SET room_id=NULL, serial_number_in_room=NULL WHERE online_fd=%d;", current_fd);
-                  execute_mysql_query(connection, query);
-
-                  // ! needed?
-                  // broadcast to others
-                  // char broadcast_message[ROW_SIZE] = {0};
-                  // sprintf(broadcast_message, "%s leave game room %u, game ends\n", current_login_username, current_room_id);
-                  // send_message_to_others_in_room(connection, current_room_id, broadcast_message);
-
-
-                  // TODO: change the serial number of user after him
-
-                  // TODO: make room round = 0
-
-
-
-
-
-                } else {  // the user is NOT host and the room is NOT playing game
-
-                  // ! needed?
-                  // char success_message[ROW_SIZE] = {0};
-                  // sprintf(success_message, "You leave game room %u\n", current_room_id);
-                  // write(current_fd, success_message, strlen(success_message));
-
-                  // update current user's room to null
-                  memset(query, 0, QUERY_SIZE);
-                  sprintf(query, "UPDATE users SET room_id=NULL, serial_number_in_room=NULL WHERE online_fd=%d;", current_fd);
-                  execute_mysql_query(connection, query);
-
-                  // ! needed?
-                  // broadcast to others
-                  // char broadcast_message[ROW_SIZE] = {0};
-                  // sprintf(broadcast_message, "%s leave game room %u\n", current_login_username, current_room_id);
-                  // send_message_to_others_in_room(connection, current_room_id, broadcast_message);
-
-                  // TODO: change the serial number of user after him
                 }
               }
 
@@ -1603,10 +1573,12 @@ int main(int argc, char *argv[]) {
 
 
 
-              // TODO: logout
+              // logout
               memset(query, 0, QUERY_SIZE);
               sprintf(query, "UPDATE users SET online_fd=NULL WHERE id=%d", user_id);
               execute_mysql_query(connection, query);
+
+
 
 
 
@@ -1627,17 +1599,27 @@ int main(int argc, char *argv[]) {
         }
       }
     }
-    // TODO
   }
 
-  // // MySQL query
-  // execute_mysql_query_and_print(connection, "show tables");
-  // * socket close
+
+
+
+
+  // socket close
   close(tcp_socket_for_listen);
   close(udp_socket);
   close(epoll_fd);
-  // * MySQL close
+
+
+
+
+
+  // MySQL close
   mysql_close(connection);
+
+
+
+
 
   return 0;
 }

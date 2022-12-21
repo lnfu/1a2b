@@ -64,9 +64,6 @@ int get_mysql_query_result_row_count(MYSQL *connection, const char *query) {
   return query_result_row_count;
 }
 
-
-
-
 // register
 bool username_and_email_are_unique(MYSQL *connection, const char *username, const char *email) {
   char query[QUERY_SIZE] = {0};
@@ -80,6 +77,7 @@ bool username_and_email_are_unique(MYSQL *connection, const char *username, cons
 
   return (row_count == 0);
 }
+
 void register_user(MYSQL *connection, const char *username, const char *email, const char *passwd) {
   printf("Register a new user... ");
 
@@ -90,11 +88,53 @@ void register_user(MYSQL *connection, const char *username, const char *email, c
   printf("done\n");
 }
 
+// exit
+void evict_all_users_from_room(MYSQL *connection, const unsigned int room_id) {
+  char query[QUERY_SIZE] = {0};
+
+  printf("Clear room %u (users table)... ", room_id);
+  memset(query, 0, QUERY_SIZE);
+  sprintf(query, "UPDATE users SET room_id=NULL, serial_number_in_room=NULL WHERE room_id=%u;", room_id);
+  execute_mysql_query(connection, query);
+  printf("done\n");
+}
+
+void delete_room(MYSQL *connection, const unsigned int room_id) {
+  char query[QUERY_SIZE] = {0};
+
+  printf("Delete room (rooms table)... ");
+  memset(query, 0, QUERY_SIZE);
+  sprintf(query, "DELETE FROM rooms WHERE id=%u;", room_id);
+  execute_mysql_query(connection, query);
+  printf("done\n");
+}
+
+int get_serial_number_in_room_by_user_id(MYSQL *connection, const int user_id) {
+  MYSQL_RES *result;
+  MYSQL_ROW row;
+  char query[QUERY_SIZE] = {0};
+  int serial_number_in_room = 0;
+
+  printf("Query the serial number of this user... ");
+
+  memset(query, 0, QUERY_SIZE);
+  sprintf(query, "SELECT serial_number_in_room FROM users WHERE id=%d;", user_id);
+  execute_mysql_query(connection, query);
+
+  result = mysql_use_result(connection);
+  row = mysql_fetch_row(result);
+
+  sscanf(row[0], "%d", &serial_number_in_room);
+
+  mysql_free_result(result);
+
+  printf("done (serial_number = %d)\n", serial_number_in_room);
+
+  return serial_number_in_room;
+}
 
 
-
-
-// *********************************
+// lan de sie
 int get_user_id_by_current_fd(MYSQL *connection, const int current_fd, char *current_login_username) {
   MYSQL_RES *result;
   MYSQL_ROW row;
@@ -170,8 +210,6 @@ bool check_user_is_not_logged_in_by_username(MYSQL *connection, const char *user
 
   return true;
 }
-
-
 
 int get_online_fd_by_email(MYSQL *connection, const char *email) {
   MYSQL_RES *result;
@@ -258,10 +296,6 @@ bool check_current_fd_is_in_room(MYSQL *connection, const int current_fd, unsign
   return false;
 }
 
-
-
-
-
 void get_email_by_online_fd(MYSQL *connection, const int online_fd, char *email) {
   MYSQL_RES *result;
   MYSQL_ROW row;
@@ -277,7 +311,6 @@ void get_email_by_online_fd(MYSQL *connection, const int online_fd, char *email)
 
   mysql_free_result(result);
 }
-
 
 void get_username_by_online_fd(MYSQL *connection, const int online_fd, char *username) {
   MYSQL_RES *result;
@@ -295,10 +328,6 @@ void get_username_by_online_fd(MYSQL *connection, const int online_fd, char *use
   mysql_free_result(result);
 }
 
-
-
-
-// 看有沒有重複 room_id
 bool room_id_is_unique(MYSQL *connection, const unsigned int room_id) {
   char query[QUERY_SIZE] = {0};
 
@@ -315,9 +344,6 @@ bool room_id_is_unique(MYSQL *connection, const unsigned int room_id) {
   return true;
 }
 
-
-
-// tell the room class is public or private
 bool is_room_public(MYSQL *connection, const unsigned int room_id) {
   MYSQL_RES *result;
   MYSQL_ROW row;
@@ -387,7 +413,6 @@ bool is_user_host(MYSQL *connection, const int user_id) {
   return true;
 }
 
-
 void send_message_to_others_in_room(MYSQL *connection, const unsigned int room_id, const char *message) {
   MYSQL_RES *result;
   MYSQL_ROW row;
@@ -413,9 +438,6 @@ void send_message_to_others_in_room(MYSQL *connection, const unsigned int room_i
   mysql_free_result(result);
 }
 
-
-// ********************************
-
 int get_room_user_count(MYSQL *connection, const unsigned int room_id) {
   char query[QUERY_SIZE] = {0};
 
@@ -428,7 +450,6 @@ int get_room_user_count(MYSQL *connection, const unsigned int room_id) {
   printf("done (number = %d)\n", number);
   return number;
 }
-
 
 int get_current_serial_number_in_room(MYSQL *connection, const unsigned int room_id) {
   MYSQL_RES *result;
@@ -451,7 +472,6 @@ int get_current_serial_number_in_room(MYSQL *connection, const unsigned int room
 
   return serial_number;
 }
-
 
 int get_current_playing_user_id_in_room(MYSQL *connection, const unsigned int room_id) {
   MYSQL_RES *result;
@@ -486,7 +506,6 @@ int get_current_playing_user_id_in_room(MYSQL *connection, const unsigned int ro
   return user_id;
 }
 
-
 void get_username_by_user_id(MYSQL *connection, const int user_id, char *username) {
   MYSQL_RES *result;
   MYSQL_ROW row;
@@ -494,7 +513,6 @@ void get_username_by_user_id(MYSQL *connection, const int user_id, char *usernam
 
   printf("Query the username... ");
 
-  // get serial number
   memset(query, 0, QUERY_SIZE);
   sprintf(query, "SELECT username FROM users WHERE id=%d", user_id);
   execute_mysql_query(connection, query);
@@ -507,9 +525,6 @@ void get_username_by_user_id(MYSQL *connection, const int user_id, char *usernam
 
   printf("done (username = %s)\n", username);
 }
-
-
-
 
 void get_room_answer(MYSQL *connection, const unsigned int room_id, char *answer) {
   MYSQL_RES *result;
@@ -531,6 +546,7 @@ void get_room_answer(MYSQL *connection, const unsigned int room_id, char *answer
 
   mysql_free_result(result);
 }
+
 unsigned int get_room_invitation_code(MYSQL *connection, const unsigned int room_id) {
   MYSQL_RES *result;
   MYSQL_ROW row;
